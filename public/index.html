@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PÜR Nootropics — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-pur">PÜR</span>
+        <span class="logo-sub">Nootropics</span>
+      </div>
+      <div class="header-title">Dashboard de Métricas</div>
+    </div>
+    <div class="header-right">
+      <div id="lastUpdated" class="last-updated"></div>
+      <div class="currency-toggle">
+        <span class="tc-label" id="tcLabel"></span>
+        <div class="currency-switch">
+          <button class="currency-btn active" data-currency="ARS">ARS</button>
+          <button class="currency-btn" data-currency="USD">USD</button>
+        </div>
+      </div>
+      <div class="period-selector">
+        <button class="period-btn active" data-period="day">Hoy</button>
+        <button class="period-btn" data-period="week">Semana</button>
+        <button class="period-btn" data-period="month">Mes</button>
+      </div>
+      <div class="date-range-picker" id="dateRangePicker">
+        <input type="date" id="dateFrom" class="date-input" title="Fecha inicio" />
+        <span class="date-range-sep">→</span>
+        <input type="date" id="dateTo" class="date-input" title="Fecha fin" />
+        <button class="date-apply-btn" id="applyDateRange">Aplicar</button>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" title="Actualizar datos">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- Loading -->
+    <div id="loadingState" class="loading-state">
+      <div class="spinner"></div>
+      <p>Cargando datos de Tienda Nube...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="errorState" class="error-state" style="display:none">
+      <div class="error-icon">!</div>
+      <h3>Error al cargar datos</h3>
+      <p id="errorMessage"></p>
+      <button onclick="loadDashboard()" class="btn-retry">Reintentar</button>
+    </div>
+
+    <!-- Dashboard content -->
+    <div id="dashboardContent" style="display:none">
+
+      <!-- KPI Cards -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--revenue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="kpi-body">
+            <p class="kpi-label">Ingresos Totales</p>
+            <p class="kpi-value" id="kpiRevenue">—</p>
+            <p class="kpi-change" id="kpiRevenueChange"></p>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--orders">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          </div>
+          <div class="kpi-body">
+            <p class="kpi-label">Órdenes</p>
+            <p class="kpi-value" id="kpiOrders">—</p>
+            <p class="kpi-change" id="kpiOrdersChange"></p>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--ticket">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          </div>
+          <div class="kpi-body">
+            <p class="kpi-label">Ticket Promedio</p>
+            <p class="kpi-value" id="kpiAvgTicket">—</p>
+            <p class="kpi-change" id="kpiTicketChange"></p>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--customers">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <div class="kpi-body">
+            <p class="kpi-label">Clientes Nuevos</p>
+            <p class="kpi-value" id="kpiNewCustomers">—</p>
+            <p class="kpi-subtext" id="kpiReturningCustomers"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Charts row 1 -->
+      <section class="charts-grid">
+        <div class="chart-card chart-card--wide">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Ventas en el Tiempo</h3>
+              <p class="chart-subtitle" id="salesChartSubtitle"></p>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-dot legend-dot--revenue"></span>Ingresos</span>
+              <span class="legend-item"><span class="legend-dot legend-dot--orders"></span>Órdenes</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="salesChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Estado de Envíos</h3>
+              <p class="chart-subtitle" id="shippingTotal"></p>
+            </div>
+          </div>
+          <div class="chart-container chart-container--sm">
+            <canvas id="shippingChart"></canvas>
+          </div>
+          <div id="shippingLegend" class="shipping-legend"></div>
+        </div>
+      </section>
+
+      <!-- Charts row 2 -->
+      <section class="charts-grid">
+        <div class="chart-card chart-card--wide">
+          <div class="chart-header">
+            <h3 class="chart-title">Productos Más Vendidos</h3>
+            <p class="chart-subtitle">Por cantidad de unidades</p>
+          </div>
+          <div class="chart-container">
+            <canvas id="productsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Clientes</h3>
+            <p class="chart-subtitle">Nuevos vs recurrentes</p>
+          </div>
+          <div class="chart-container chart-container--sm">
+            <canvas id="customersChart"></canvas>
+          </div>
+          <div id="customersLegend" class="shipping-legend"></div>
+        </div>
+      </section>
+
+      <!-- Recent orders -->
+      <section class="table-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Órdenes Recientes</h3>
+          <span class="badge" id="ordersTableBadge"></span>
+        </div>
+        <div class="table-wrapper">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Pago</th>
+                <th>Envío</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══════════════════ RENTABILIDAD ══════════════════ -->
+      <section class="profit-section" id="profitSection" style="display:none">
+        <div class="profit-header">
+          <div>
+            <h2 class="profit-title">Rentabilidad</h2>
+            <p class="profit-subtitle" id="profitSubtitle">Ingresos vs inversión publicitaria</p>
+          </div>
+          <span class="profit-badge" id="profitBadge"></span>
+        </div>
+        <!-- Fila 1: ingresos + costos -->
+        <div class="profit-grid profit-grid--costs">
+
+          <div class="profit-card">
+            <div class="profit-card-icon profit-icon--revenue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <p class="profit-label">Ingresos Brutos</p>
+            <p class="profit-value" id="profRevenue">—</p>
+            <p class="profit-note">Total facturado Tienda Nube</p>
+          </div>
+
+          <div class="profit-card profit-card--cost">
+            <div class="profit-card-icon profit-icon--ads">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            <p class="profit-label">Inversión en Ads</p>
+            <p class="profit-value" id="profAds">—</p>
+            <p class="profit-note" id="profAdsNote">Gasto Meta Ads convertido</p>
+          </div>
+
+          <div class="profit-card profit-card--cost">
+            <div class="profit-card-icon profit-icon--comision">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h2"/><path d="M10 15h6"/></svg>
+            </div>
+            <p class="profit-label">Comisiones Pago Nube</p>
+            <p class="profit-value" id="profComision">—</p>
+            <p class="profit-note" id="profComisionNote">—</p>
+          </div>
+
+          <div class="profit-card profit-card--cost">
+            <div class="profit-card-icon profit-icon--plan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            </div>
+            <p class="profit-label">Plan Tienda Nube</p>
+            <p class="profit-value" id="profPlan">—</p>
+            <p class="profit-note" id="profPlanNote">Prorrateado al período</p>
+          </div>
+
+        </div>
+
+        <!-- Fila 2: resultados -->
+        <div class="profit-grid profit-grid--results">
+
+          <div class="profit-card profit-card--highlight" id="profitGainCard">
+            <div class="profit-card-icon profit-icon--gain">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+            <p class="profit-label">Ganancia Neta</p>
+            <p class="profit-value" id="profGain">—</p>
+            <p class="profit-note" id="profGainNote">Ingresos − todos los costos</p>
+          </div>
+
+          <div class="profit-card">
+            <div class="profit-card-icon profit-icon--roas">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <p class="profit-label">ROAS General</p>
+            <p class="profit-value" id="profRoas">—</p>
+            <p class="profit-note">Ingresos ÷ Inversión en Ads</p>
+          </div>
+
+          <div class="profit-card">
+            <div class="profit-card-icon profit-icon--margin">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+            </div>
+            <p class="profit-label">Margen Neto</p>
+            <p class="profit-value" id="profMargin">—</p>
+            <p class="profit-note">(Ingr. − todos los costos) / Ingr.</p>
+          </div>
+
+          <div class="profit-card">
+            <div class="profit-card-icon profit-icon--cac">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            </div>
+            <p class="profit-label">Costo por Orden (CAC)</p>
+            <p class="profit-value" id="profCac">—</p>
+            <p class="profit-note">Ads ÷ Órdenes</p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══════════════════ META ADS SECTION ══════════════════ -->
+      <div class="section-divider">
+        <div class="section-divider-line"></div>
+        <div class="section-divider-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+          Meta Ads
+        </div>
+        <div class="section-divider-line"></div>
+      </div>
+
+      <!-- Meta loading -->
+      <div id="metaLoadingState" class="meta-loading">
+        <div class="spinner spinner--sm"></div>
+        <span>Cargando Meta Ads...</span>
+      </div>
+
+      <!-- Meta error -->
+      <div id="metaErrorState" class="meta-error" style="display:none">
+        <span class="meta-error-icon">!</span>
+        <span id="metaErrorMessage"></span>
+        <button onclick="loadMeta()" class="btn-retry btn-retry--sm">Reintentar</button>
+      </div>
+
+      <!-- Meta content -->
+      <div id="metaContent" style="display:none">
+
+        <!-- Meta KPI Cards -->
+        <section class="kpi-grid kpi-grid--meta">
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-spend">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Gasto Total</p>
+              <p class="kpi-value" id="metaSpend">—</p>
+              <p class="kpi-subtext" id="metaCpm"></p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-reach">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Impresiones</p>
+              <p class="kpi-value" id="metaImpressions">—</p>
+              <p class="kpi-subtext" id="metaReach"></p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-clicks">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 10 20 10 20 3 13 3 13 8"/><path d="M8 13H3v8h8v-5"/><path d="M12 3L3 12"/><path d="M13 8l7 7-4.5 4.5-7-7"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Clics</p>
+              <p class="kpi-value" id="metaClicks">—</p>
+              <p class="kpi-subtext" id="metaCtr"></p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-cpc">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">CPC</p>
+              <p class="kpi-value" id="metaCpc">—</p>
+              <p class="kpi-subtext">Costo por clic</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-conv">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Compras</p>
+              <p class="kpi-value" id="metaPurchases">—</p>
+              <p class="kpi-subtext" id="metaRevenue"></p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--meta-roas">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">ROAS</p>
+              <p class="kpi-value" id="metaRoas">—</p>
+              <p class="kpi-subtext">Retorno por dólar invertido</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Meta chart: daily spend -->
+        <section class="charts-grid charts-grid--meta">
+          <div class="chart-card chart-card--wide">
+            <div class="chart-header">
+              <div>
+                <h3 class="chart-title">Gasto Diario en Ads</h3>
+                <p class="chart-subtitle" id="metaChartSubtitle"></p>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#1877f2"></span>Gasto (USD)</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>ROAS</span>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="metaSpendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 class="chart-title">Clics vs Impresiones</h3>
+              <p class="chart-subtitle">Distribución diaria</p>
+            </div>
+            <div class="chart-container">
+              <canvas id="metaClicksChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Campaigns table -->
+        <section class="table-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Campañas</h3>
+            <span class="badge badge--meta" id="metaCampaignsBadge"></span>
+          </div>
+          <div class="table-wrapper">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>Campaña</th>
+                  <th>Estado</th>
+                  <th>Gasto</th>
+                  <th>Impresiones</th>
+                  <th>Clics</th>
+                  <th>CTR</th>
+                  <th>CPC</th>
+                  <th>Compras</th>
+                  <th>ROAS</th>
+                </tr>
+              </thead>
+              <tbody id="metaCampaignsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div><!-- /metaContent -->
+
+    </div><!-- /dashboardContent -->
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

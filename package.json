@@ -1,0 +1,18 @@
+{
+  "name": "pur-nootropics-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard de métricas para PÜR Nootropics",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  }
+}
