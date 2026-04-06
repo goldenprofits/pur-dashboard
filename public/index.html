@@ -191,6 +191,39 @@
         </div>
       </section>
 
+      <!-- ══════════════════ UNIDADES + COMPARATIVO ══════════════════ -->
+      <section class="units-compare-section" id="unitsCompareSection" style="display:none">
+
+        <!-- Mini KPIs unidades por canal -->
+        <div class="units-grid">
+          <div class="units-card">
+            <p class="units-label">Unidades TN</p>
+            <p class="units-value" id="unitsTN">—</p>
+            <p class="units-note">Tienda Nube</p>
+          </div>
+          <div class="units-card units-card--ml">
+            <p class="units-label">Unidades ML</p>
+            <p class="units-value" id="unitsML">—</p>
+            <p class="units-note">Mercado Libre</p>
+          </div>
+          <div class="units-card units-card--total">
+            <p class="units-label">Total Unidades</p>
+            <p class="units-value" id="unitsTotal">—</p>
+            <p class="units-note">Ambos canales</p>
+          </div>
+
+          <!-- Comparativo TN vs ML (chart) -->
+          <div class="units-chart-card">
+            <h3 class="chart-title">Comparativo por Canal</h3>
+            <p class="chart-subtitle">Ingresos, Órdenes y Ticket Promedio — TN vs ML</p>
+            <div style="position:relative;height:160px;margin-top:12px">
+              <canvas id="compareChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
       <!-- ══════════════════ RENTABILIDAD ══════════════════ -->
       <section class="profit-section" id="profitSection" style="display:none">
         <div class="profit-header">
@@ -237,6 +270,24 @@
             <p class="profit-label">Plan Tienda Nube</p>
             <p class="profit-value" id="profPlan">—</p>
             <p class="profit-note" id="profPlanNote">Prorrateado al período</p>
+          </div>
+
+          <div class="profit-card profit-card--cost">
+            <div class="profit-card-icon profit-icon--shipping">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+            <p class="profit-label">Envíos (Andreani)</p>
+            <p class="profit-value" id="profShipping">—</p>
+            <p class="profit-note" id="profShippingNote">Costo real de envío</p>
+          </div>
+
+          <div class="profit-card profit-card--cost">
+            <div class="profit-card-icon profit-icon--cogs">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            </div>
+            <p class="profit-label">Costo Mercadería</p>
+            <p class="profit-value" id="profCogs">—</p>
+            <p class="profit-note" id="profCogsNote">Costo de productos vendidos</p>
           </div>
 
         </div>
@@ -434,6 +485,144 @@
         </section>
 
       </div><!-- /metaContent -->
+
+      <!-- ══════════════════ MERCADO LIBRE SECTION ══════════════════ -->
+      <div class="section-divider">
+        <div class="section-divider-line"></div>
+        <div class="section-divider-label section-divider-label--ml">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 7h2v6h-2zm0 8h2v2h-2z"/></svg>
+          Mercado Libre
+        </div>
+        <div class="section-divider-line"></div>
+      </div>
+
+      <!-- ML loading -->
+      <div id="mlLoadingState" class="meta-loading">
+        <div class="spinner spinner--sm"></div>
+        <span>Cargando Mercado Libre...</span>
+      </div>
+
+      <!-- ML error -->
+      <div id="mlErrorState" class="meta-error" style="display:none">
+        <span class="meta-error-icon">!</span>
+        <span id="mlErrorMessage"></span>
+        <button onclick="loadML()" class="btn-retry btn-retry--sm">Reintentar</button>
+      </div>
+
+      <!-- ML content -->
+      <div id="mlContent" style="display:none">
+
+        <!-- ML KPI Cards -->
+        <section class="kpi-grid kpi-grid--ml">
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Ingresos ML</p>
+              <p class="kpi-value" id="mlRevenue">—</p>
+              <p class="kpi-subtext">Órdenes pagadas</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml-orders">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Órdenes</p>
+              <p class="kpi-value" id="mlOrders">—</p>
+              <p class="kpi-subtext" id="mlUnitsSubtext"></p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml-ticket">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Ticket Promedio</p>
+              <p class="kpi-value" id="mlAvgTicket">—</p>
+              <p class="kpi-subtext">Por orden pagada</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml-units">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Unidades Vendidas</p>
+              <p class="kpi-value" id="mlUnits">—</p>
+              <p class="kpi-subtext">Total de items</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml-comision">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Comisiones ML</p>
+              <p class="kpi-value" id="mlComisiones">—</p>
+              <p class="kpi-subtext">~13% estimado</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-icon--ml-shipping">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+            <div class="kpi-body">
+              <p class="kpi-label">Costo Envíos</p>
+              <p class="kpi-value" id="mlShipping">—</p>
+              <p class="kpi-subtext">Mercado Envíos</p>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ML Sales Chart -->
+        <section class="chart-card" style="margin-bottom:16px">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Ventas en el Tiempo — Mercado Libre</h3>
+              <p class="chart-subtitle" id="mlChartSubtitle"></p>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-dot" style="background:#FFE600"></span>Ingresos</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Órdenes</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="mlSalesChart"></canvas>
+          </div>
+        </section>
+
+        <!-- ML Orders Table -->
+        <section class="table-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Órdenes Recientes — Mercado Libre</h3>
+            <span class="badge badge--ml" id="mlOrdersBadge"></span>
+          </div>
+          <div class="table-wrapper">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Comprador</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody id="mlOrdersBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div><!-- /mlContent -->
 
     </div><!-- /dashboardContent -->
   </main>

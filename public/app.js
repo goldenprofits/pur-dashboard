@@ -41,6 +41,7 @@ let displayCurrency = 'ARS';   // 'ARS' | 'USD'
 let exchangeRate    = 1;        // dolar blue venta (ARS por 1 USD)
 let dashData        = null;     // última respuesta de /api/dashboard
 let metaData        = null;     // última respuesta de /api/meta
+let mlData          = null;     // última respuesta de /api/mercadolibre
 let currency        = 'ARS';   // moneda nativa de TN
 let charts          = {};
 let appConfig       = { comision_promedio: 0.05, plan_tienda_nube: 24999 };
@@ -222,6 +223,13 @@ function rerenderAll() {
   if (metaData) {
     renderMeta(metaData);
   }
+  if (mlData) {
+    renderML(mlData);
+    renderMLSalesChart(mlData.sales_chart, mlData.period, mlData.date_from, mlData.date_to);
+  }
+  if (dashData && mlData) {
+    renderUnitsCompare();
+  }
   if (dashData && metaData) {
     renderRentabilidad();
   }
@@ -255,6 +263,7 @@ async function loadFx() {
 async function loadDashboard() {
   await Promise.all([loadFx(), loadConfig()]);
   loadMeta();       // corre en paralelo con su propio estado
+  loadML();         // corre en paralelo con su propio estado
   showLoading();
 
   try {
@@ -550,24 +559,36 @@ function renderRentabilidad() {
   if (!dashData || !metaData) return;
 
   // ── Valores base (siempre en ARS nativo o USD nativo) ──────────────────────
-  const revenue      = dashData.summary.revenue;   // ARS
-  const orders       = dashData.summary.orders;
+  const revenueTN    = dashData.summary.revenue;   // ARS
+  const revenueML    = mlData ? mlData.summary.revenue : 0;  // ARS
+  const revenue      = revenueTN + revenueML;
+  const orders       = dashData.summary.orders + (mlData ? mlData.summary.orders : 0);
   const spend        = metaData.summary.spend;     // USD
   const daysInPeriod = dashData.days_in_period || 30;
 
-  // Comisión Pago Nube: % sobre ingresos brutos (en ARS)
-  const comisionARS = revenue * appConfig.comision_promedio;
+  // Comisión Pago Nube: % sobre ingresos TN
+  const comisionARS   = revenueTN * appConfig.comision_promedio;
+  // Comisiones ML (ya en ARS)
+  const comisionML    = mlData ? mlData.summary.comisiones_ml : 0;
+  const shippingOwner = dashData.summary.shipping_cost_owner || 0;
+  const unitsSoldTN   = dashData.summary.units_sold || 0;
+  const unitsSoldML   = mlData ? mlData.summary.units_sold : 0;
+  const costoUnitario = 2200;
+  const cogsARS       = (unitsSoldTN + unitsSoldML) * costoUnitario;
 
   // Plan TN: $24.999/mes prorrateado por días del período (en ARS)
   const planARS = (appConfig.plan_tienda_nube / 30) * daysInPeriod;
 
   // ── Convertir TODO a moneda de display ─────────────────────────────────────
-  const revDisplay      = convARS(revenue);
-  const adsDisplay      = convUSD(spend);           // ads USD → display
-  const comisionDisplay = convARS(comisionARS);
-  const planDisplay     = convARS(planARS);
+  const revDisplay        = convARS(revenue);
+  const adsDisplay        = convUSD(spend);
+  const comisionDisplay   = convARS(comisionARS);
+  const comisionMLDisplay = convARS(comisionML);
+  const planDisplay       = convARS(planARS);
+  const shippingDisplay   = convARS(shippingOwner);
+  const cogsDisplay       = convARS(cogsARS);
 
-  const totalCosts = adsDisplay + comisionDisplay + planDisplay;
+  const totalCosts = adsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay;
   const gain       = revDisplay - totalCosts;
   const roas       = adsDisplay > 0 ? revDisplay / adsDisplay : 0;
   const margin     = revDisplay > 0 ? (gain / revDisplay) * 100 : 0;
@@ -583,6 +604,13 @@ function renderRentabilidad() {
 
   // ── Renderizar tarjetas de costos ──────────────────────────────────────────
   el('profRevenue').textContent  = fmt(revDisplay);
+  // Nota de desglose TN + ML si hay datos ML
+  if (mlData && revenueML > 0) {
+    el('profitSubtitle').textContent =
+      `TN ${fmt(convARS(revenueTN))} + ML ${fmt(convARS(revenueML))} · Comisiones ML incluidas`;
+  } else {
+    el('profitSubtitle').textContent = 'Ingresos vs inversión publicitaria';
+  }
 
   el('profAds').textContent      = fmt(adsDisplay);
   el('profAdsNote').textContent  = displayCurrency === 'ARS' && exchangeRate > 1
@@ -594,6 +622,15 @@ function renderRentabilidad() {
     `${(appConfig.comision_promedio * 100).toFixed(1)}% s/ ingresos (incl. IVA)`;
 
   el('profPlan').textContent     = fmt(planDisplay);
+
+  el('profShipping').textContent     = fmt(shippingDisplay);
+  el('profCogs').textContent     = fmt(cogsDisplay);
+  const totalUnits = unitsSoldTN + unitsSoldML;
+  el('profCogsNote').textContent = totalUnits > 0
+    ? `${totalUnits} u. (TN ${unitsSoldTN} + ML ${unitsSoldML}) × ${fmt(convARS(costoUnitario))}`
+    : 'Sin ventas';
+
+  el('profShippingNote').textContent = orders > 0 ? `Costo real Andreani ( órdenes)` : 'Sin envíos';
   el('profPlanNote').textContent = daysInPeriod >= 28
     ? `Mes completo`
     : `${daysInPeriod} días de ${fmt(convARS(appConfig.plan_tienda_nube))}/mes`;
@@ -601,7 +638,7 @@ function renderRentabilidad() {
   // ── Renderizar tarjetas de resultados ──────────────────────────────────────
   el('profGain').textContent    = fmt(gain);
   el('profGainNote').textContent = gain >= 0
-    ? `Ingresos − Ads − Comisiones − Plan`
+    ? `Ingr. − Ads − Com.TN − Com.ML − Plan − Envíos − COGS`
     : '¡Costos mayores a ingresos!';
 
   el('profRoas').textContent    = roas > 0 ? `${roas.toFixed(2)}x` : '—';
@@ -825,6 +862,234 @@ function renderMetaCampaigns(campaigns) {
   }).join('');
 }
 
+// ─── Unidades + Comparativo ───────────────────────────────────────────────────
+function renderUnitsCompare() {
+  if (!dashData || !mlData) return;
+
+  const unitsTN    = dashData.summary.units_sold || 0;
+  const unitsML    = mlData.summary.units_sold   || 0;
+  const unitsTotal = unitsTN + unitsML;
+
+  el('unitsTN').textContent    = fmtNumber(unitsTN);
+  el('unitsML').textContent    = fmtNumber(unitsML);
+  el('unitsTotal').textContent = fmtNumber(unitsTotal);
+
+  // Gráfico comparativo
+  destroyChart('compareChart');
+  const ctx = el('compareChart').getContext('2d');
+
+  const revTN  = convARS(dashData.summary.revenue);
+  const revML  = convARS(mlData.summary.revenue);
+  const ordTN  = dashData.summary.orders;
+  const ordML  = mlData.summary.orders;
+  const tktTN  = convARS(dashData.summary.avg_ticket);
+  const tktML  = convARS(mlData.summary.avg_ticket);
+
+  charts.compare = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Ingresos', 'Órdenes', 'Ticket Prom.'],
+      datasets: [
+        {
+          label: 'Tienda Nube',
+          data: [revTN, ordTN, tktTN],
+          backgroundColor: 'rgba(78,205,196,0.7)',
+          borderColor: '#4ECDC4',
+          borderWidth: 1,
+          borderRadius: 4
+        },
+        {
+          label: 'Mercado Libre',
+          data: [revML, ordML, tktML],
+          backgroundColor: 'rgba(255,230,0,0.7)',
+          borderColor: '#FFE600',
+          borderWidth: 1,
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#8892a4', font: { size: 11 }, boxWidth: 10 }
+        },
+        tooltip: {
+          backgroundColor: '#1a1d2e', borderColor: '#252a42', borderWidth: 1,
+          titleColor: '#e2e8f0', bodyColor: '#8892a4',
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (ctx.dataIndex === 0) return ` ${ctx.dataset.label}: ${fmtMoney(displayCurrency === 'USD' ? v * exchangeRate : v)}`;
+              if (ctx.dataIndex === 2) return ` ${ctx.dataset.label}: ${fmtMoney(displayCurrency === 'USD' ? v * exchangeRate : v)}`;
+              return ` ${ctx.dataset.label}: ${Math.round(v)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#4a5568', font: { size: 11 } } },
+        y: {
+          grid: { color: '#1e2236' },
+          ticks: { color: '#4a5568', font: { size: 11 }, callback: v => fmtMoneyShort(displayCurrency === 'USD' ? v * exchangeRate : v) }
+        }
+      }
+    }
+  });
+
+  el('unitsCompareSection').style.display = 'block';
+}
+
+// ML Sales Chart
+function renderMLSalesChart(chart, period, dateFrom, dateTo) {
+  let subtitle;
+  if (period === 'custom' && dateFrom && dateTo) {
+    subtitle = `Por día — ${fmtDate(dateFrom)} al ${fmtDate(dateTo)}`;
+  } else {
+    subtitle = { day: 'Por hora — hoy', week: 'Por día — últimos 7 días', month: 'Por día — últimos 30 días' }[period] || '';
+  }
+  el('mlChartSubtitle').textContent = subtitle;
+
+  destroyChart('mlSalesChart');
+  if (!chart || !chart.labels || !chart.labels.length) return;
+
+  const ctx = el('mlSalesChart').getContext('2d');
+  const revenueData = chart.revenue.map(v => convARS(v));
+
+  charts.mlSales = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chart.labels.map(l => fmtLabel(l, period)),
+      datasets: [
+        {
+          label: 'Ingresos',
+          data: revenueData,
+          borderColor: '#FFE600',
+          backgroundColor: gradient(ctx, '#FFE600'),
+          borderWidth: 2,
+          pointRadius: chart.labels.length > 20 ? 0 : 3,
+          pointHoverRadius: 5,
+          tension: 0.3,
+          fill: true,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Órdenes',
+          data: chart.orders,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: chart.labels.length > 20 ? 0 : 3,
+          pointHoverRadius: 5,
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d2e', borderColor: '#252a42', borderWidth: 1,
+          titleColor: '#e2e8f0', bodyColor: '#8892a4', padding: 12,
+          callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) return ` Ingresos: ${fmtMoney(chart.revenue[ctx.dataIndex])}`;
+              return ` Órdenes: ${ctx.parsed.y}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#1e2236' }, ticks: { color: '#4a5568', font: { size: 11 }, maxTicksLimit: 10 } },
+        y: {
+          position: 'left', grid: { color: '#1e2236' },
+          ticks: { color: '#4a5568', font: { size: 11 }, callback: v => fmtMoneyShort(displayCurrency === 'USD' ? v * exchangeRate : v) }
+        },
+        y1: {
+          position: 'right', grid: { drawOnChartArea: false },
+          ticks: { color: '#4a5568', font: { size: 11 }, stepSize: 1 }
+        }
+      }
+    }
+  });
+}
+
+// ─── Mercado Libre ────────────────────────────────────────────────────────────
+async function loadML() {
+  el('mlLoadingState').style.display = 'flex';
+  el('mlErrorState').style.display   = 'none';
+  el('mlContent').style.display      = 'none';
+
+  try {
+    let url;
+    if (currentPeriod === 'custom' && customDateFrom && customDateTo) {
+      url = `/api/mercadolibre?date_from=${customDateFrom}&date_to=${customDateTo}`;
+    } else {
+      url = `/api/mercadolibre?period=${currentPeriod}`;
+    }
+    const resp = await fetch(url);
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.details || e.error || `HTTP ${resp.status}`); }
+    mlData = await resp.json();
+    renderML(mlData);
+    el('mlLoadingState').style.display = 'none';
+    el('mlContent').style.display      = 'block';
+    tryRenderRentabilidad();
+  } catch (err) {
+    el('mlLoadingState').style.display = 'none';
+    el('mlErrorState').style.display   = 'flex';
+    el('mlErrorMessage').textContent   = err.message;
+  }
+}
+
+const ML_STATUS_LABELS = {
+  paid: 'Pagada', cancelled: 'Cancelada', pending: 'Pendiente', confirmed: 'Confirmada'
+};
+
+function renderML(data) {
+  const s = data.summary;
+  el('mlRevenue').textContent    = fmtMoney(s.revenue);
+  el('mlOrders').textContent     = fmtNumber(s.orders);
+  el('mlUnitsSubtext').textContent = `${fmtNumber(s.units_sold)} unidades`;
+  el('mlAvgTicket').textContent  = fmtMoney(s.avg_ticket);
+  el('mlUnits').textContent      = fmtNumber(s.units_sold);
+  el('mlComisiones').textContent = fmtMoney(s.comisiones_ml);
+  el('mlShipping').textContent   = fmtMoney(s.shipping_cost);
+
+  el('mlOrdersBadge').textContent = `${data.recent_orders.length} órdenes`;
+
+  renderMLSalesChart(data.sales_chart, data.period, data.date_from, data.date_to);
+
+  const tbody = el('mlOrdersBody');
+  if (!data.recent_orders.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.recent_orders.map(o => {
+    const date   = new Date(o.date);
+    const dateStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) +
+                    ' ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    const statusKey = o.status || 'unknown';
+    const statusLabel = ML_STATUS_LABELS[statusKey] || statusKey;
+    const statusCls = `ml--${statusKey}`;
+    return `
+      <tr>
+        <td><span class="order-number">#${o.id}</span></td>
+        <td><div class="order-customer">${esc(o.buyer)}</div></td>
+        <td><span class="order-total">${fmtMoney(o.total)}</span></td>
+        <td><span class="status-badge ${statusCls}">${statusLabel}</span></td>
+        <td><span class="order-date">${dateStr}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
 // ─── UI State ─────────────────────────────────────────────────────────────────
 function showLoading() {
   el('loadingState').style.display    = 'flex';
@@ -836,6 +1101,12 @@ function showContent() {
   el('loadingState').style.display    = 'none';
   el('errorState').style.display      = 'none';
   el('dashboardContent').style.display = 'block';
+  if (dashData && mlData)   renderUnitsCompare();
+  if (dashData && metaData) renderRentabilidad();
+}
+
+function tryRenderRentabilidad() {
+  if (dashData && mlData)   renderUnitsCompare();
   if (dashData && metaData) renderRentabilidad();
 }
 
@@ -854,7 +1125,9 @@ function destroyChart(id) {
     productsChart:   'products',
     customersChart:  'customers',
     metaSpendChart:  'metaSpend',
-    metaClicksChart: 'metaClicks'
+    metaClicksChart: 'metaClicks',
+    mlSalesChart:    'mlSales',
+    compareChart:    'compare'
   };
   const k = chartMap[id];
   if (k && charts[k]) { charts[k].destroy(); charts[k] = null; }

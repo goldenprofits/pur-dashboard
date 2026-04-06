@@ -25,6 +25,15 @@ const META_BASE = `https://graph.facebook.com/${META_API_VERSION}`;
 const COMISION_PROMEDIO = parseFloat(process.env.COMISION_PROMEDIO || '0.05');
 const PLAN_TIENDA_NUBE  = parseFloat(process.env.PLAN_TIENDA_NUBE  || '24999');
 
+// ML tokens in-memory (se renuevan automáticamente sin tocar .env)
+const ml = {
+  clientId:     process.env.ML_CLIENT_ID,
+  clientSecret: process.env.ML_CLIENT_SECRET,
+  accessToken:  process.env.ML_ACCESS_TOKEN,
+  refreshToken: process.env.ML_REFRESH_TOKEN,
+  userId:       process.env.ML_USER_ID
+};
+
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 const cache = new Map();
 const CACHE_TTL    = 5  * 60 * 1000; // 5 minutos  (datos de negocio)
@@ -61,7 +70,8 @@ async function fetchAllPages(endpoint, params = {}) {
       if (items.length < 200 || page >= 50) break;
       page++;
     } catch (err) {
-      if (err.response?.status === 429) {
+      if (err.response?.status === 404) break;
+        if (err.response?.status === 429) {
         await new Promise(r => setTimeout(r, 2500));
         continue;
       }
@@ -236,6 +246,9 @@ app.get('/api/dashboard', async (req, res) => {
     const paidPrevious = previousOrders.filter(isPaidOrder);
 
     const currentRevenue = paidCurrent.reduce((s, o) => s + parseFloat(o.total || 0), 0);
+    const shippingCostOwner = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_owner || 0), 0);
+    const shippingCostCustomer = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_customer || 0), 0);
+    const unitsSold = validCurrent.reduce((s, o) => s + (o.products || []).reduce((ps, p) => ps + (p.quantity || 0), 0), 0);
     const previousRevenue = paidPrevious.reduce((s, o) => s + parseFloat(o.total || 0), 0);
     const avgTicket = validCurrent.length > 0 ? currentRevenue / validCurrent.length : 0;
     const prevAvgTicket = validPrevious.length > 0 ? previousRevenue / validPrevious.length : 0;
@@ -284,7 +297,10 @@ app.get('/api/dashboard', async (req, res) => {
         previous_avg_ticket: prevAvgTicket,
         avg_ticket_change: pctChange(avgTicket, prevAvgTicket),
         new_customers: customers.new,
-        returning_customers: customers.returning
+        returning_customers: customers.returning,
+        shipping_cost_owner: shippingCostOwner,
+        shipping_cost_customer: shippingCostCustomer,
+        units_sold: unitsSold
       },
       sales_chart: {
         labels: Object.keys(buckets),
@@ -325,7 +341,7 @@ async function metaGet(path, params = {}) {
     });
     return resp.data;
   } catch (err) {
-    if (err.response?.status === 429) {
+        if (err.response?.status === 429) {
       await new Promise(r => setTimeout(r, 3000));
       return metaGet(path, params);
     }
@@ -476,6 +492,212 @@ app.get('/api/fx', async (req, res) => {
     // Si falla, devolver un fallback en lugar de romper el dashboard
     console.error('Error dolarapi:', err.message);
     res.status(200).json({ compra: null, venta: null, error: err.message });
+  }
+});
+
+// ─── Mercado Libre helpers ────────────────────────────────────────────────────
+async function mlRefreshToken() {
+  const resp = await axios.post('https://api.mercadolibre.com/oauth/token', null, {
+    params: {
+      grant_type:    'refresh_token',
+      client_id:     ml.clientId,
+      client_secret: ml.clientSecret,
+      refresh_token: ml.refreshToken
+    },
+    timeout: 10000
+  });
+  ml.accessToken  = resp.data.access_token;
+  ml.refreshToken = resp.data.refresh_token;
+  console.log('ML token renovado OK');
+}
+
+async function mlGet(path, params = {}, retry = true) {
+  try {
+    const resp = await axios.get(`https://api.mercadolibre.com${path}`, {
+      headers: { Authorization: `Bearer ${ml.accessToken}` },
+      params,
+      timeout: 20000
+    });
+    return resp.data;
+  } catch (err) {
+    if (err.response?.status === 401 && retry) {
+      await mlRefreshToken();
+      return mlGet(path, params, false);
+    }
+    if (err.response?.status === 429) {
+      await new Promise(r => setTimeout(r, 2500));
+      return mlGet(path, params, retry);
+    }
+    throw err;
+  }
+}
+
+async function mlFetchOrders(dateFrom, dateTo) {
+  const all = [];
+  let offset = 0;
+  const limit = 50;
+
+  while (true) {
+    const data = await mlGet('/orders/search', {
+      seller:                      ml.userId,
+      'order.date_created.from':   dateFrom,
+      'order.date_created.to':     dateTo,
+      sort:                        'date_desc',
+      limit,
+      offset
+    });
+
+    const results = data?.results || [];
+    all.push(...results);
+
+    const total = data?.paging?.total || 0;
+    offset += results.length;
+    if (results.length < limit || offset >= total || offset >= 1000) break;
+  }
+
+  return all;
+}
+
+function mlDateParams(period, dateFrom, dateTo) {
+  if (period === 'custom' && dateFrom && dateTo) {
+    return {
+      from: `${dateFrom}T00:00:00.000-03:00`,
+      to:   `${dateTo}T23:59:59.000-03:00`
+    };
+  }
+  const now   = new Date();
+  const toStr = now.toISOString().replace('Z', '-03:00');
+
+  const days = period === 'day' ? 1 : period === 'week' ? 7 : 30;
+  const from = new Date(now);
+  from.setDate(from.getDate() - (days - 1));
+  from.setHours(0, 0, 0, 0);
+
+  return {
+    from: from.toISOString().replace('Z', '-03:00'),
+    to:   toStr
+  };
+}
+
+// ─── Mercado Libre route ──────────────────────────────────────────────────────
+app.get('/api/mercadolibre', async (req, res) => {
+  const { date_from, date_to } = req.query;
+  const isCustom = date_from && date_to && /^\d{4}-\d{2}-\d{2}$/.test(date_from) && /^\d{4}-\d{2}-\d{2}$/.test(date_to);
+  const period   = isCustom ? 'custom' : (['day', 'week', 'month'].includes(req.query.period) ? req.query.period : 'week');
+  const cacheKey = isCustom ? `ml_custom_${date_from}_${date_to}` : `ml_${period}`;
+  const cached   = getCached(cacheKey);
+  if (cached) return res.json({ ...cached, fromCache: true });
+
+  if (!ml.clientId || !ml.accessToken) {
+    return res.status(503).json({ error: 'Credenciales de Mercado Libre no configuradas' });
+  }
+
+  try {
+    const { from, to } = mlDateParams(period, date_from, date_to);
+    const orders = await mlFetchOrders(from, to);
+
+    const paidOrders = orders.filter(o => o.status === 'paid');
+
+    const revenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
+    const ordersCount = paidOrders.length;
+    const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
+
+    const unitsSold = paidOrders.reduce((s, o) =>
+      s + (o.order_items || []).reduce((ps, i) => ps + (i.quantity || 0), 0), 0);
+
+    const shippingCost = paidOrders.reduce((s, o) =>
+      s + (o.shipping?.cost || 0), 0);
+
+    // Comisión estimada: 13% sobre revenue (incluye comisión ML + Mercado Pago)
+    const COMISION_ML = 0.13;
+    const comisiones = revenue * COMISION_ML;
+
+    // Productos más vendidos
+    const productMap = {};
+    paidOrders.forEach(o => {
+      (o.order_items || []).forEach(item => {
+        const title = item.item?.title || 'Producto desconocido';
+        const id    = item.item?.id || title;
+        if (!productMap[id]) productMap[id] = { name: title, quantity: 0, revenue: 0 };
+        productMap[id].quantity += item.quantity || 0;
+        productMap[id].revenue  += (item.unit_price || 0) * (item.quantity || 0);
+      });
+    });
+    const topProducts = Object.values(productMap)
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 8);
+
+    // Órdenes recientes (las últimas 10, todas)
+    const recentOrders = orders.slice(0, 10).map(o => ({
+      id:       o.id,
+      buyer:    o.buyer?.nickname || 'Comprador',
+      total:    o.total_amount || 0,
+      status:   o.status,
+      date:     o.date_created
+    }));
+
+    // Sales chart: buckets diarios (o por hora si period=day)
+    const chartBuckets = {};
+    if (period === 'day') {
+      for (let h = 0; h < 24; h++) {
+        chartBuckets[`${String(h).padStart(2, '0')}:00`] = { revenue: 0, orders: 0 };
+      }
+      paidOrders.forEach(o => {
+        const key = `${String(new Date(o.date_created).getHours()).padStart(2, '0')}:00`;
+        if (chartBuckets[key]) {
+          chartBuckets[key].revenue += o.total_amount || 0;
+          chartBuckets[key].orders  += 1;
+        }
+      });
+    } else {
+      const { from: fromStr } = mlDateParams(period, date_from, date_to);
+      const startDate = new Date(fromStr);
+      startDate.setHours(0, 0, 0, 0);
+      const days = period === 'week' ? 7 : period === 'month' ? 30
+        : Math.round((new Date(to) - startDate) / 86400000) + 1;
+      for (let i = 0; i < days; i++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        chartBuckets[d.toISOString().split('T')[0]] = { revenue: 0, orders: 0 };
+      }
+      paidOrders.forEach(o => {
+        const key = (o.date_created || '').split('T')[0];
+        if (chartBuckets[key]) {
+          chartBuckets[key].revenue += o.total_amount || 0;
+          chartBuckets[key].orders  += 1;
+        }
+      });
+    }
+
+    const result = {
+      period,
+      ...(isCustom && { date_from, date_to }),
+      fetched_at: new Date().toISOString(),
+      summary: {
+        revenue,
+        orders:        ordersCount,
+        avg_ticket:    avgTicket,
+        units_sold:    unitsSold,
+        shipping_cost: shippingCost,
+        comisiones_ml: comisiones
+      },
+      sales_chart: {
+        labels:  Object.keys(chartBuckets),
+        revenue: Object.values(chartBuckets).map(b => parseFloat(b.revenue.toFixed(2))),
+        orders:  Object.values(chartBuckets).map(b => b.orders)
+      },
+      top_products:   topProducts,
+      recent_orders:  recentOrders
+    };
+
+    setCache(cacheKey, result);
+    res.json(result);
+  } catch (err) {
+    console.error('Error API Mercado Libre:', err.response?.data || err.message);
+    res.status(500).json({
+      error:   'Error al obtener datos de Mercado Libre',
+      details: err.response?.data?.message || err.message
+    });
   }
 });
 

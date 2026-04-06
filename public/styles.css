@@ -734,3 +734,88 @@ body {
 }
 
 .order-date { color: var(--text-muted); white-space: nowrap; }
+.profit-icon--shipping { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.profit-icon--cogs     { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+
+/* ─── Mercado Libre ────────────────────────────────────────────────────────── */
+.section-divider-label--ml {
+  color: #FFE600;
+  background: rgba(255, 230, 0, 0.12);
+  border-color: rgba(255, 230, 0, 0.25);
+}
+
+.kpi-grid--ml { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1200px) { .kpi-grid--ml { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px)  { .kpi-grid--ml { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-icon--ml          { background: rgba(255,230,0,0.15); color: #FFE600; }
+.kpi-icon--ml-orders   { background: rgba(255,230,0,0.12); color: #f0c000; }
+.kpi-icon--ml-ticket   { background: rgba(255,200,0,0.12); color: #e0b000; }
+.kpi-icon--ml-units    { background: rgba(255,230,0,0.10); color: #c8a000; }
+.kpi-icon--ml-comision { background: rgba(239,68,68,0.12);  color: var(--red); }
+.kpi-icon--ml-shipping { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+
+.badge--ml { background: rgba(255,230,0,0.15); color: #c8a000; }
+
+.ml--paid      { background: rgba(255,230,0,0.15); color: #b8980a; }
+.ml--cancelled { background: var(--red-dim);        color: var(--red); }
+.ml--pending   { background: var(--yellow-dim);     color: var(--yellow); }
+.ml--unknown   { background: rgba(100,100,100,.15); color: #888; }
+
+/* ─── Unidades + Comparativo ───────────────────────────────────────────────── */
+.units-compare-section {
+  margin-bottom: 20px;
+}
+
+.units-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 2fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .units-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .units-grid { grid-template-columns: 1fr; }
+}
+
+.units-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  text-align: center;
+}
+.units-card--ml    { border-color: rgba(255,230,0,0.25); background: rgba(255,230,0,0.04); }
+.units-card--total { border-color: rgba(78,205,196,0.3); background: rgba(78,205,196,0.05); }
+
+.units-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.units-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.units-card--ml    .units-value { color: #FFE600; }
+.units-card--total .units-value { color: #4ECDC4; }
+.units-note {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.units-chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
