@@ -706,6 +706,153 @@ app.post('/api/refresh', (req, res) => {
   res.json({ ok: true, message: 'Cache limpiado' });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CRM — RUTAS NUEVAS (no modifican nada de lo anterior)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const Anthropic = require('@anthropic-ai/sdk');
+
+// ─── CRM: Alertas automáticas ─────────────────────────────────────────────────
+app.get('/api/crm/alertas', async (req, res) => {
+  const cacheKey = 'crm_alertas';
+  const cached = getCached(cacheKey, 2 * 60 * 1000); // 2 min TTL para CRM
+  if (cached) return res.json({ ...cached, fromCache: true });
+
+  try {
+    const now = new Date();
+    const hace7dias = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    // Traer órdenes de los últimos 7 días (open/pending/cancelled)
+    const ordenes = await fetchAllPages('/orders', {
+      created_at_min: hace7dias.toISOString(),
+      created_at_max: now.toISOString(),
+    });
+
+    const carritosAbandonados = [];
+    const pagosPendientes = [];
+    const cancelaciones = [];
+
+    ordenes.forEach((o) => {
+      const createdAt = new Date(o.created_at);
+      const diffMs = now - createdAt;
+      const diffHs = diffMs / (1000 * 60 * 60);
+      const diffMin = Math.floor(diffMs / 60000);
+
+      const base = {
+        id: o.id,
+        numero: o.number,
+        cliente: o.customer?.name || 'Cliente sin nombre',
+        email: o.customer?.email || null,
+        telefono: o.customer?.phone || null,
+        productos: (o.products || []).map((p) => ({
+          nombre: p.name,
+          cantidad: p.quantity,
+          precio: parseFloat(p.price || 0),
+        })),
+        total: parseFloat(o.total || 0),
+        moneda: o.currency || 'ARS',
+        created_at: o.created_at,
+        hace: formatTiempo(diffMin),
+        diff_hs: diffHs,
+      };
+
+      // Carrito abandonado: open + pending payment + más de 2 horas
+      if (
+        (o.status === 'open' || o.payment_status === 'pending') &&
+        o.status !== 'cancelled' &&
+        diffHs >= 2 &&
+        diffHs < 72
+      ) {
+        carritosAbandonados.push({ ...base, tipo: 'carrito' });
+      }
+
+      // Pago pendiente: payment_status pending + más de 24hs
+      if (o.payment_status === 'pending' && o.status !== 'cancelled' && diffHs >= 24) {
+        pagosPendientes.push({ ...base, tipo: 'pago' });
+      }
+
+      // Cancelaciones últimos 7 días
+      if (o.status === 'cancelled') {
+        cancelaciones.push({ ...base, tipo: 'cancelacion' });
+      }
+    });
+
+    // Ordenar por más reciente primero dentro de cada tipo
+    const sortRecent = (a, b) => b.diff_hs - a.diff_hs;
+    carritosAbandonados.sort(sortRecent);
+    pagosPendientes.sort(sortRecent);
+    cancelaciones.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const result = {
+      fetched_at: now.toISOString(),
+      resumen: {
+        carritos: carritosAbandonados.length,
+        pagos: pagosPendientes.length,
+        cancelaciones: cancelaciones.length,
+        total: carritosAbandonados.length + pagosPendientes.length + cancelaciones.length,
+      },
+      carritos_abandonados: carritosAbandonados,
+      pagos_pendientes: pagosPendientes,
+      cancelaciones,
+    };
+
+    setCache(cacheKey, result);
+    res.json(result);
+  } catch (err) {
+    console.error('CRM alertas error:', err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data || err.message });
+  }
+});
+
+function formatTiempo(diffMin) {
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const hs = Math.floor(diffMin / 60);
+  if (hs < 24) return `hace ${hs}h`;
+  const dias = Math.floor(hs / 24);
+  return `hace ${dias} día${dias > 1 ? 's' : ''}`;
+}
+
+// ─── CRM: Generación de mensaje con Claude ────────────────────────────────────
+app.post('/api/crm/mensaje', async (req, res) => {
+  const { alerta } = req.body;
+  if (!alerta) return res.status(400).json({ error: 'alerta requerida' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey === 'TU_API_KEY_AQUI') {
+    return res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurada en .env' });
+  }
+
+  const anthropic = new Anthropic({ apiKey });
+
+  const productosStr = (alerta.productos || [])
+    .map((p) => `${p.nombre} (x${p.cantidad})`)
+    .join(', ');
+
+  const contextos = {
+    carrito: `El cliente ${alerta.cliente} dejó un carrito abandonado ${alerta.hace} con estos productos: ${productosStr}. Total: ${alerta.moneda} ${alerta.total.toLocaleString('es-AR')}. Generá un mensaje de WhatsApp para recuperar la venta. Mencioná el producto específico. Creá urgencia real sin mentir.`,
+    pago: `El cliente ${alerta.cliente} tiene un pago pendiente ${alerta.hace} por ${alerta.moneda} ${alerta.total.toLocaleString('es-AR')} (${productosStr}). Generá un mensaje de WhatsApp amable pero directo para resolver el pago.`,
+    cancelacion: `El cliente ${alerta.cliente} canceló una orden ${alerta.hace} de ${productosStr} (${alerta.moneda} ${alerta.total.toLocaleString('es-AR')}). Generá un mensaje de WhatsApp para entender el motivo y ofrecer ayuda genuina. No insistas en la venta.`,
+  };
+
+  const userPrompt = contextos[alerta.tipo] || contextos.carrito;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 400,
+      system:
+        'Sos el asistente de ventas de PÜR Nootropics Co., una marca argentina premium de suplementos naturales y pasta dental con nHAp. Tu tono es directo, motivacional, estilo Mamba Mentality. Nunca generes promesas vacías. Escribí mensajes cortos, humanos, sin emojis en exceso. Siempre en español rioplatense (vos, te, tu). Solo respondé con el texto del mensaje, sin explicaciones ni comillas.',
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const texto = message.content[0]?.text || '';
+    res.json({ mensaje: texto });
+  } catch (err) {
+    console.error('Claude error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('*', (req, res) => {

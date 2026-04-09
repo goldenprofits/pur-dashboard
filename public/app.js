@@ -145,6 +145,45 @@ function gradient(ctx, color) {
 
 function el(id) { return document.getElementById(id); }
 
+// ─── Preset date-range helper ─────────────────────────────────────────────────
+function getPresetDateRange(preset) {
+  const now  = new Date();
+  const pad  = n => String(n).padStart(2, '0');
+  const fmt  = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const today = fmt(now);
+
+  switch (preset) {
+    case 'today':     return null; // uses period=day (hourly buckets)
+    case 'yesterday': {
+      const y = new Date(now); y.setDate(now.getDate() - 1);
+      const s = fmt(y); return { from: s, to: s };
+    }
+    case 'this-week': {
+      const diff = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const mon  = new Date(now); mon.setDate(now.getDate() - diff);
+      return { from: fmt(mon), to: today };
+    }
+    case 'last-week': {
+      const diff    = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const thisMon = new Date(now); thisMon.setDate(now.getDate() - diff);
+      const lastSun = new Date(thisMon); lastSun.setDate(thisMon.getDate() - 1);
+      const lastMon = new Date(thisMon); lastMon.setDate(thisMon.getDate() - 7);
+      return { from: fmt(lastMon), to: fmt(lastSun) };
+    }
+    case 'this-month':
+      return { from: `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`, to: today };
+    case 'last-month': {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last  = new Date(first.getTime() - 1);
+      const lfst  = new Date(last.getFullYear(), last.getMonth(), 1);
+      return { from: fmt(lfst), to: fmt(last) };
+    }
+    case 'this-year':
+      return { from: `${now.getFullYear()}-01-01`, to: today };
+    default: return null;
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   // Period buttons
@@ -152,12 +191,22 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      currentPeriod = btn.dataset.period;
-      customDateFrom = null;
-      customDateTo = null;
       el('dateFrom').value = '';
-      el('dateTo').value = '';
+      el('dateTo').value   = '';
       el('dateRangePicker').classList.remove('active');
+
+      const preset = btn.dataset.period;
+      const range  = getPresetDateRange(preset);
+      if (range === null) {
+        // 'today' → native hourly mode
+        currentPeriod  = 'day';
+        customDateFrom = null;
+        customDateTo   = null;
+      } else {
+        currentPeriod  = 'custom';
+        customDateFrom = range.from;
+        customDateTo   = range.to;
+      }
       loadDashboard();
     });
   });
