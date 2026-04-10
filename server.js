@@ -34,6 +34,32 @@ const ml = {
   userId:       process.env.ML_USER_ID
 };
 
+// ─── Timezone helpers (Argentina = UTC-3, fixed offset, no DST) ──────────────
+const AR_OFFSET_MS = 3 * 60 * 60 * 1000; // 3 horas en ms
+
+// Retorna el Date correspondiente a medianoche (00:00:00) hora argentina del día UTC dado.
+// AR midnight = 03:00:00 UTC del mismo día calendario AR.
+function arMidnight(utcDate) {
+  // Convertir a "tiempo AR local" para leer la fecha correcta en AR
+  const arLocal = new Date(utcDate.getTime() - AR_OFFSET_MS);
+  const y = arLocal.getUTCFullYear();
+  const m = arLocal.getUTCMonth();
+  const d = arLocal.getUTCDate();
+  // Medianoche AR = ese año/mes/día a las 03:00:00 UTC
+  return new Date(Date.UTC(y, m, d, 3, 0, 0, 0));
+}
+
+// Hora AR (0-23) de un timestamp ISO cualquiera
+function arHour(isoString) {
+  return new Date(new Date(isoString).getTime() - AR_OFFSET_MS).getUTCHours();
+}
+
+// Fecha AR (YYYY-MM-DD) de un timestamp ISO cualquiera
+function arDate(isoString) {
+  const d = new Date(new Date(isoString).getTime() - AR_OFFSET_MS);
+  return d.toISOString().split('T')[0];
+}
+
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 const cache = new Map();
 const CACHE_TTL    = 5  * 60 * 1000; // 5 minutos  (datos de negocio)
@@ -87,12 +113,16 @@ function getDateRanges(period) {
   const now = new Date();
   const days = period === 'day' ? 1 : period === 'week' ? 7 : 30;
 
-  const currentStart = new Date(now);
-  currentStart.setDate(now.getDate() - (days - 1));
-  currentStart.setHours(0, 0, 0, 0);
+  // Medianoche AR de hoy
+  const todayStart = arMidnight(now);
+
+  // Para period='day': desde medianoche AR de hoy hasta ahora
+  // Para 'week'/'month': retroceder (days-1) días desde hoy
+  const currentStart = new Date(todayStart);
+  currentStart.setUTCDate(todayStart.getUTCDate() - (days - 1));
 
   const previousStart = new Date(currentStart);
-  previousStart.setDate(currentStart.getDate() - days);
+  previousStart.setUTCDate(currentStart.getUTCDate() - days);
 
   const previousEnd = new Date(currentStart.getTime() - 1);
 
@@ -105,8 +135,9 @@ function getDateRanges(period) {
 }
 
 function getCustomDateRange(dateFrom, dateTo) {
-  const currentStart = new Date(dateFrom + 'T00:00:00');
-  const currentEnd = new Date(dateTo + 'T23:59:59');
+  // Especificar offset AR explícitamente para que Node.js no asuma UTC
+  const currentStart = new Date(dateFrom + 'T00:00:00-03:00');
+  const currentEnd   = new Date(dateTo   + 'T23:59:59-03:00');
   const days = Math.round((currentEnd - currentStart) / (1000 * 60 * 60 * 24)) + 1;
 
   const previousEnd = new Date(currentStart.getTime() - 1);
@@ -131,7 +162,7 @@ function buildChartBuckets(orders, period, currentStart, currentEnd) {
       buckets[`${String(h).padStart(2, '0')}:00`] = { revenue: 0, orders: 0 };
     }
     orders.forEach(o => {
-      const key = `${String(new Date(o.created_at).getHours()).padStart(2, '0')}:00`;
+      const key = `${String(arHour(o.created_at)).padStart(2, '0')}:00`;
       if (buckets[key]) {
         buckets[key].revenue += parseFloat(o.total || 0);
         buckets[key].orders += 1;
@@ -143,13 +174,12 @@ function buildChartBuckets(orders, period, currentStart, currentEnd) {
       : Math.round((currentEnd - currentStart) / (1000 * 60 * 60 * 24)) + 1;
 
     for (let i = 0; i < days; i++) {
-      const d = new Date(currentStart);
-      d.setDate(currentStart.getDate() + i);
-      const key = d.toISOString().split('T')[0];
+      const d = new Date(currentStart.getTime() + i * 86400000);
+      const key = arDate(d.toISOString()); // fecha en timezone AR
       buckets[key] = { revenue: 0, orders: 0 };
     }
     orders.forEach(o => {
-      const key = o.created_at.split('T')[0];
+      const key = arDate(o.created_at); // fecha AR de la orden
       if (buckets[key]) {
         buckets[key].revenue += parseFloat(o.total || 0);
         buckets[key].orders += 1;
@@ -562,21 +592,23 @@ function mlDateParams(period, dateFrom, dateTo) {
   if (period === 'custom' && dateFrom && dateTo) {
     return {
       from: `${dateFrom}T00:00:00.000-03:00`,
-      to:   `${dateTo}T23:59:59.000-03:00`
+      to:   `${dateTo}T23:59:59.999-03:00`
     };
   }
-  const now   = new Date();
-  const toStr = now.toISOString().replace('Z', '-03:00');
-
+  const now  = new Date();
   const days = period === 'day' ? 1 : period === 'week' ? 7 : 30;
-  const from = new Date(now);
-  from.setDate(from.getDate() - (days - 1));
-  from.setHours(0, 0, 0, 0);
 
-  return {
-    from: from.toISOString().replace('Z', '-03:00'),
-    to:   toStr
-  };
+  // Medianoche AR de hace (days-1) días
+  const fromDate = arMidnight(now);
+  fromDate.setUTCDate(fromDate.getUTCDate() - (days - 1));
+
+  // Fin: momento actual expresado como ISO con offset AR
+  // now en UTC → convertir a AR local → formatear con offset -03:00
+  const arNow   = new Date(now.getTime() - AR_OFFSET_MS);
+  const toStr   = arNow.toISOString().replace('Z', '-03:00');
+  const fromStr = new Date(fromDate.getTime() - AR_OFFSET_MS).toISOString().replace('Z', '-03:00');
+
+  return { from: fromStr, to: toStr };
 }
 
 // ─── Mercado Libre route ──────────────────────────────────────────────────────
@@ -643,7 +675,7 @@ app.get('/api/mercadolibre', async (req, res) => {
         chartBuckets[`${String(h).padStart(2, '0')}:00`] = { revenue: 0, orders: 0 };
       }
       paidOrders.forEach(o => {
-        const key = `${String(new Date(o.date_created).getHours()).padStart(2, '0')}:00`;
+        const key = `${String(arHour(o.date_created)).padStart(2, '0')}:00`;
         if (chartBuckets[key]) {
           chartBuckets[key].revenue += o.total_amount || 0;
           chartBuckets[key].orders  += 1;
@@ -651,17 +683,16 @@ app.get('/api/mercadolibre', async (req, res) => {
       });
     } else {
       const { from: fromStr } = mlDateParams(period, date_from, date_to);
-      const startDate = new Date(fromStr);
-      startDate.setHours(0, 0, 0, 0);
+      // fromStr está en -03:00: parsear como UTC y usar arMidnight
+      const startDate = arMidnight(new Date(fromStr));
       const days = period === 'week' ? 7 : period === 'month' ? 30
         : Math.round((new Date(to) - startDate) / 86400000) + 1;
       for (let i = 0; i < days; i++) {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + i);
-        chartBuckets[d.toISOString().split('T')[0]] = { revenue: 0, orders: 0 };
+        const d = new Date(startDate.getTime() + i * 86400000);
+        chartBuckets[arDate(d.toISOString())] = { revenue: 0, orders: 0 };
       }
       paidOrders.forEach(o => {
-        const key = (o.date_created || '').split('T')[0];
+        const key = arDate(o.date_created || new Date().toISOString());
         if (chartBuckets[key]) {
           chartBuckets[key].revenue += o.total_amount || 0;
           chartBuckets[key].orders  += 1;

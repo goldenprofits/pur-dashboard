@@ -105,34 +105,87 @@ body {
   color: var(--text-dim);
 }
 
-.period-selector {
+.period-dropdown {
+  position: relative;
+}
+
+.period-trigger {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
-  max-width: 380px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+  min-width: 120px;
+  justify-content: space-between;
+}
+.period-trigger:hover {
+  border-color: var(--border-light);
+  background: var(--bg-card-hover);
+}
+.period-dropdown.open .period-trigger {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
 }
 
-.period-btn {
-  background: none;
-  border: none;
+.period-arrow {
+  flex-shrink: 0;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 9px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
-  white-space: nowrap;
+  transition: transform 0.2s ease;
 }
-.period-btn:hover { color: var(--text); background: var(--border); }
-.period-btn.active {
-  background: var(--primary);
-  color: #fff;
+.period-dropdown.open .period-arrow {
+  transform: rotate(180deg);
+}
+
+.period-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: dropdownIn 0.15s ease;
+}
+.period-dropdown.open .period-menu {
+  display: block;
+}
+
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.period-option {
+  padding: 8px 12px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  user-select: none;
+}
+.period-option:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.period-option.active {
+  background: var(--primary-dim);
+  color: var(--primary-light);
 }
 
 .date-range-picker {

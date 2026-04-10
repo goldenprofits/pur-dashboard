@@ -186,29 +186,51 @@ function getPresetDateRange(preset) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Period buttons
-  document.querySelectorAll('.period-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      el('dateFrom').value = '';
-      el('dateTo').value   = '';
-      el('dateRangePicker').classList.remove('active');
+  // Period dropdown
+  const dropdown = el('periodDropdown');
+  const trigger  = el('periodTrigger');
+  const menu     = el('periodMenu');
 
-      const preset = btn.dataset.period;
-      const range  = getPresetDateRange(preset);
-      if (range === null) {
-        // 'today' → native hourly mode
-        currentPeriod  = 'day';
-        customDateFrom = null;
-        customDateTo   = null;
-      } else {
-        currentPeriod  = 'custom';
-        customDateFrom = range.from;
-        customDateTo   = range.to;
-      }
-      loadDashboard();
-    });
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', dropdown.classList.contains('open'));
+  });
+
+  document.addEventListener('click', () => {
+    if (dropdown.classList.contains('open')) {
+      dropdown.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  menu.addEventListener('click', e => {
+    const opt = e.target.closest('.period-option');
+    if (!opt) return;
+    e.stopPropagation();
+
+    document.querySelectorAll('.period-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    el('periodLabel').textContent = opt.textContent;
+    dropdown.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    el('dateFrom').value = '';
+    el('dateTo').value   = '';
+    el('dateRangePicker').classList.remove('active');
+
+    const preset = opt.dataset.period;
+    const range  = getPresetDateRange(preset);
+    if (range === null) {
+      currentPeriod  = 'day';
+      customDateFrom = null;
+      customDateTo   = null;
+    } else {
+      currentPeriod  = 'custom';
+      customDateFrom = range.from;
+      customDateTo   = range.to;
+    }
+    loadDashboard();
   });
 
   // Date range picker
@@ -223,7 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
     customDateFrom = from;
     customDateTo   = to;
     currentPeriod  = 'custom';
-    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.period-option').forEach(o => o.classList.remove('active'));
+    el('periodLabel').textContent = `${fmtDate(from)} → ${fmtDate(to)}`;
     loadDashboard();
   });
 

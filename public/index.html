@@ -32,14 +32,20 @@
           <button class="currency-btn" data-currency="USD">USD</button>
         </div>
       </div>
-      <div class="period-selector">
-        <button class="period-btn active" data-period="today">Hoy</button>
-        <button class="period-btn" data-period="yesterday">Ayer</button>
-        <button class="period-btn" data-period="this-week">Esta Semana</button>
-        <button class="period-btn" data-period="last-week">Sem. Pasada</button>
-        <button class="period-btn" data-period="this-month">Este Mes</button>
-        <button class="period-btn" data-period="last-month">Mes Pasado</button>
-        <button class="period-btn" data-period="this-year">Este Año</button>
+      <div class="period-dropdown" id="periodDropdown">
+        <button class="period-trigger" id="periodTrigger" aria-haspopup="listbox" aria-expanded="false">
+          <span id="periodLabel">Hoy</span>
+          <svg class="period-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <ul class="period-menu" id="periodMenu" role="listbox">
+          <li class="period-option active" data-period="today" role="option">Hoy</li>
+          <li class="period-option" data-period="yesterday" role="option">Ayer</li>
+          <li class="period-option" data-period="this-week" role="option">Esta Semana</li>
+          <li class="period-option" data-period="last-week" role="option">Semana Pasada</li>
+          <li class="period-option" data-period="this-month" role="option">Este Mes</li>
+          <li class="period-option" data-period="last-month" role="option">Mes Pasado</li>
+          <li class="period-option" data-period="this-year" role="option">Este Año</li>
+        </ul>
       </div>
       <div class="date-range-picker" id="dateRangePicker">
         <input type="date" id="dateFrom" class="date-input" title="Fecha inicio" />
