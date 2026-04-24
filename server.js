@@ -646,6 +646,15 @@ app.get('/api/mercadolibre', async (req, res) => {
     const unitsSold = paidOrders.reduce((s, o) =>
       s + (o.order_items || []).reduce((ps, i) => ps + (i.quantity || 0), 0), 0);
 
+    const cogsCalculado = paidOrders.reduce((total, o) => {
+      return total + (o.order_items || []).reduce((s, i) => {
+        const nombre = (i.item?.title || '').toLowerCase();
+        const qty = parseInt(i.quantity || 0);
+        const costo = nombre.includes('pasta') ? 2200 : 5000;
+        return s + qty * costo;
+      }, 0);
+    }, 0);
+
     const shippingCost = paidOrders.reduce((s, o) =>
       s + (o.shipping?.cost || 0), 0);
 
@@ -717,9 +726,10 @@ app.get('/api/mercadolibre', async (req, res) => {
         revenue,
         orders:        ordersCount,
         avg_ticket:    avgTicket,
-        units_sold:    unitsSold,
-        shipping_cost: shippingCost,
-        comisiones_ml: comisiones
+        units_sold:      unitsSold,
+        cogs_calculado:  cogsCalculado,
+        shipping_cost:   shippingCost,
+        comisiones_ml:   comisiones
       },
       sales_chart: {
         labels:  Object.keys(chartBuckets),

@@ -645,7 +645,9 @@ function renderRentabilidad() {
   const shippingOwner = dashData.summary.shipping_cost_owner || 0;
   const unitsSoldTN   = dashData.summary.units_sold || 0;
   const unitsSoldML   = mlData ? mlData.summary.units_sold : 0;
-  const cogsARS = dashData.summary.cogs_calculado || (unitsSoldTN * 5000) + (unitsSoldML * 5000);
+  const cogsTN  = dashData.summary.cogs_calculado || 0;
+  const cogsML  = (mlData?.summary?.cogs_calculado) || 0;
+  const cogsARS = cogsTN + cogsML;
 
   // Plan TN: $24.999/mes prorrateado por días del período (en ARS)
   const planARS = (appConfig.plan_tienda_nube / 30) * daysInPeriod;
