@@ -279,6 +279,14 @@ app.get('/api/dashboard', async (req, res) => {
     const shippingCostOwner = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_owner || 0), 0);
     const shippingCostCustomer = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_customer || 0), 0);
     const unitsSold = validCurrent.reduce((s, o) => s + (o.products || []).reduce((ps, p) => ps + (p.quantity || 0), 0), 0);
+    const cogsCalculado = validCurrent.reduce((total, o) => {
+      return total + (o.products || []).reduce((s, p) => {
+        const nombre = (p.name || '').toLowerCase();
+        const qty = parseInt(p.quantity || 0);
+        const costo = nombre.includes('pasta') ? 2200 : 5000;
+        return s + qty * costo;
+      }, 0);
+    }, 0);
     const previousRevenue = paidPrevious.reduce((s, o) => s + parseFloat(o.total || 0), 0);
     const avgTicket = validCurrent.length > 0 ? currentRevenue / validCurrent.length : 0;
     const prevAvgTicket = validPrevious.length > 0 ? previousRevenue / validPrevious.length : 0;
@@ -330,7 +338,8 @@ app.get('/api/dashboard', async (req, res) => {
         returning_customers: customers.returning,
         shipping_cost_owner: shippingCostOwner,
         shipping_cost_customer: shippingCostCustomer,
-        units_sold: unitsSold
+        units_sold: unitsSold,
+        cogs_calculado: cogsCalculado
       },
       sales_chart: {
         labels: Object.keys(buckets),

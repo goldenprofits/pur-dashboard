@@ -645,8 +645,7 @@ function renderRentabilidad() {
   const shippingOwner = dashData.summary.shipping_cost_owner || 0;
   const unitsSoldTN   = dashData.summary.units_sold || 0;
   const unitsSoldML   = mlData ? mlData.summary.units_sold : 0;
-  const costoUnitario = 2200;
-  const cogsARS       = (unitsSoldTN + unitsSoldML) * costoUnitario;
+  const cogsARS = dashData.summary.cogs_calculado || (unitsSoldTN * 5000) + (unitsSoldML * 5000);
 
   // Plan TN: $24.999/mes prorrateado por días del período (en ARS)
   const planARS = (appConfig.plan_tienda_nube / 30) * daysInPeriod;
@@ -699,7 +698,7 @@ function renderRentabilidad() {
   el('profCogs').textContent     = fmt(cogsDisplay);
   const totalUnits = unitsSoldTN + unitsSoldML;
   el('profCogsNote').textContent = totalUnits > 0
-    ? `${totalUnits} u. (TN ${unitsSoldTN} + ML ${unitsSoldML}) × ${fmt(convARS(costoUnitario))}`
+    ? `${totalUnits} u. (TN ${unitsSoldTN} + ML ${unitsSoldML}) — Pasta $2.200 / Gummies $5.000`
     : 'Sin ventas';
 
   el('profShippingNote').textContent = orders > 0 ? `Costo real Andreani ( órdenes)` : 'Sin envíos';
