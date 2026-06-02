@@ -31,7 +31,8 @@ const ml = {
   clientSecret: process.env.ML_CLIENT_SECRET,
   accessToken:  process.env.ML_ACCESS_TOKEN,
   refreshToken: process.env.ML_REFRESH_TOKEN,
-  userId:       process.env.ML_USER_ID
+  userId:       process.env.ML_USER_ID,
+  advertiserId: process.env.ML_ADVERTISER_ID || '2826535'
 };
 
 // ─── Timezone helpers (Argentina = UTC-3, fixed offset, no DST) ──────────────
@@ -278,6 +279,8 @@ app.get('/api/dashboard', async (req, res) => {
     const currentRevenue = paidCurrent.reduce((s, o) => s + parseFloat(o.total || 0), 0);
     const shippingCostOwner = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_owner || 0), 0);
     const shippingCostCustomer = validCurrent.reduce((s, o) => s + parseFloat(o.shipping_cost_customer || 0), 0);
+    const freeShippingOrders = validCurrent.filter(o => parseFloat(o.shipping_cost_customer || 0) === 0).length;
+    const paidShippingOrders = validCurrent.filter(o => parseFloat(o.shipping_cost_customer || 0) > 0).length;
     const unitsSold = validCurrent.reduce((s, o) => s + (o.products || []).reduce((ps, p) => ps + (p.quantity || 0), 0), 0);
     const cogsCalculado = validCurrent.reduce((total, o) => {
       return total + (o.products || []).reduce((s, p) => {
@@ -315,6 +318,7 @@ app.get('/api/dashboard', async (req, res) => {
         status: o.status,
         payment_status: o.payment_status,
         shipping_status: o.shipping_status || 'unpacked',
+        units: (o.products || []).reduce((s, p) => s + parseInt(p.quantity || 0), 0),
         created_at: o.created_at
       }));
 
@@ -339,7 +343,10 @@ app.get('/api/dashboard', async (req, res) => {
         shipping_cost_owner: shippingCostOwner,
         shipping_cost_customer: shippingCostCustomer,
         units_sold: unitsSold,
-        cogs_calculado: cogsCalculado
+        cogs_calculado: cogsCalculado,
+        free_shipping_orders: freeShippingOrders,
+        paid_shipping_orders: paidShippingOrders,
+        avg_shipping_cost_owner: validCurrent.length > 0 ? shippingCostOwner / validCurrent.length : 0
       },
       sales_chart: {
         labels: Object.keys(buckets),
@@ -571,6 +578,85 @@ async function mlGet(path, params = {}, retry = true) {
   }
 }
 
+// ─── ML Product Ads helper ────────────────────────────────────────────────────
+// Devuelve objeto con métricas de publicidad o null si la API no está disponible.
+// La API de Product Ads requiere scope "write_advertising" en la app de ML.
+async function mlGetAds(dateFrom, dateTo, period) {
+  const advId = ml.advertiserId;
+  if (!advId) return null;
+
+  // Calcular fechas si no vienen de un rango custom
+  if (!dateFrom || !dateTo) {
+    const now  = new Date();
+    const pad  = n => String(n).padStart(2, '0');
+    const fmt  = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    dateTo   = fmt(now);
+    const days = period === 'day' ? 1 : period === 'week' ? 7 : 30;
+    const from = new Date(now);
+    from.setDate(now.getDate() - (days - 1));
+    dateFrom = fmt(from);
+  }
+
+  // Intentar endpoints en orden de prioridad
+  const attempts = [
+    {
+      url:    `/advertising/product_ads/advertisers/${advId}/metrics`,
+      params: { date_from: dateFrom, date_to: dateTo },
+      parse:  d => ({
+        spend:       parseFloat(d.cost || d.spend || d.total_cost || 0),
+        revenue:     parseFloat(d.revenue || d.attributed_revenue || 0),
+        clicks:      parseInt(d.clicks || 0),
+        impressions: parseInt(d.impressions || 0),
+        sales:       parseInt(d.sales || d.attributed_sales || 0),
+        acos:        parseFloat(d.acos || 0),
+        roas:        parseFloat(d.roas || 0)
+      })
+    },
+    {
+      url:    `/advertising/product_ads/advertisers/${advId}/campaigns`,
+      params: {},
+      parse:  d => {
+        const items = d.results || d.campaigns || (Array.isArray(d) ? d : []);
+        const spend    = items.reduce((s, c) => s + parseFloat(c.spent || c.cost || 0), 0);
+        const revenue  = items.reduce((s, c) => s + parseFloat(c.revenue || c.attributed_revenue || 0), 0);
+        const clicks   = items.reduce((s, c) => s + parseInt(c.clicks || 0), 0);
+        const sales    = items.reduce((s, c) => s + parseInt(c.attributed_sales || c.sales || 0), 0);
+        return { spend, revenue, clicks, impressions: 0, sales, acos: spend > 0 && revenue > 0 ? spend / revenue * 100 : 0, roas: spend > 0 ? revenue / spend : 0 };
+      }
+    },
+    {
+      url:    `/users/${ml.userId}/advertising/campaigns`,
+      params: { limit: 50 },
+      parse:  d => {
+        const items = d.results || (Array.isArray(d) ? d : []);
+        const spend = items.reduce((s, c) => s + parseFloat(c.spent || c.cost || 0), 0);
+        return { spend, revenue: 0, clicks: 0, impressions: 0, sales: 0, acos: 0, roas: 0 };
+      }
+    }
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      console.log(`[ML Ads] Probando: ${attempt.url}`);
+      const data = await mlGet(attempt.url, attempt.params);
+      const parsed = attempt.parse(data);
+      console.log(`[ML Ads] OK — spend: ${parsed.spend}, revenue: ${parsed.revenue}, clicks: ${parsed.clicks}`);
+      return { ...parsed, available: true, date_from: dateFrom, date_to: dateTo };
+    } catch (err) {
+      const status = err.response?.status;
+      const msg    = err.response?.data?.message || err.message;
+      console.log(`[ML Ads] ${status || 'ERR'} en ${attempt.url} — ${msg}`);
+      // 404 = endpoint no existe / scope no habilitado; 403 = sin permiso; seguir intentando
+      if (status === 404 || status === 403) continue;
+      // Otros errores: parar
+      break;
+    }
+  }
+
+  console.log('[ML Ads] No disponible. Verificá que la app tenga scope "write_advertising" en developers.mercadolibre.com.ar');
+  return null;
+}
+
 async function mlFetchOrders(dateFrom, dateTo) {
   const all = [];
   let offset = 0;
@@ -662,6 +748,9 @@ app.get('/api/mercadolibre', async (req, res) => {
     const COMISION_ML = 0.13;
     const comisiones = revenue * COMISION_ML;
 
+    // Intentar obtener datos de ML Product Ads
+    const advertising = await mlGetAds(period === 'custom' ? date_from : null, period === 'custom' ? date_to : null, period);
+
     // Productos más vendidos
     const productMap = {};
     paidOrders.forEach(o => {
@@ -682,6 +771,7 @@ app.get('/api/mercadolibre', async (req, res) => {
       id:       o.id,
       buyer:    o.buyer?.nickname || 'Comprador',
       total:    o.total_amount || 0,
+      units:    (o.order_items || []).reduce((s, i) => s + (i.quantity || 0), 0),
       status:   o.status,
       date:     o.date_created
     }));
@@ -724,13 +814,16 @@ app.get('/api/mercadolibre', async (req, res) => {
       fetched_at: new Date().toISOString(),
       summary: {
         revenue,
-        orders:        ordersCount,
-        avg_ticket:    avgTicket,
-        units_sold:      unitsSold,
-        cogs_calculado:  cogsCalculado,
-        shipping_cost:   shippingCost,
-        comisiones_ml:   comisiones
+        orders:            ordersCount,
+        avg_ticket:        avgTicket,
+        units_sold:        unitsSold,
+        cogs_calculado:    cogsCalculado,
+        shipping_cost:     shippingCost,
+        comisiones_ml:     comisiones,
+        cancelled_orders:  orders.filter(o => o.status === 'cancelled').length,
+        total_orders:      orders.length
       },
+      advertising,
       sales_chart: {
         labels:  Object.keys(chartBuckets),
         revenue: Object.values(chartBuckets).map(b => parseFloat(b.revenue.toFixed(2))),

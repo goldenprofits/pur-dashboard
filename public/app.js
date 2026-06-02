@@ -45,6 +45,7 @@ let mlData          = null;     // última respuesta de /api/mercadolibre
 let currency        = 'ARS';   // moneda nativa de TN
 let charts          = {};
 let appConfig       = { comision_promedio: 0.05, plan_tienda_nube: 24999 };
+let rankingView     = 'combined'; // 'combined' | 'tn' | 'ml'
 
 // ─── Currency helpers ─────────────────────────────────────────────────────────
 
@@ -265,6 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Ranking tabs
+  document.getElementById('rankingTabs')?.addEventListener('click', e => {
+    const tab = e.target.closest('.ranking-tab');
+    if (!tab || !tab.dataset.source) return;
+    updateRanking(tab.dataset.source);
+  });
+
   // Refresh
   el('refreshBtn').addEventListener('click', async () => {
     el('refreshBtn').classList.add('spinning');
@@ -304,6 +312,10 @@ function rerenderAll() {
   }
   if (dashData && metaData) {
     renderRentabilidad();
+  }
+  if (dashData) {
+    renderIndicadoresClave();
+    updateRanking(rankingView);
   }
 }
 
@@ -558,6 +570,141 @@ function renderProductsChart(products) {
   });
 }
 
+// ─── Product Ranking ──────────────────────────────────────────────────────────
+const PRODUCT_EMOJIS = [
+  ['cordyceps', '⚡'],
+  ['melena', '🧠'],
+  ['lion', '🧠'],
+  ['reishi', '🌙'],
+  ['ashwagandha', '⚖️'],
+  ['creatina', '💪'],
+  ['creatine', '💪'],
+  ['colageno', '✨'],
+  ['collagen', '✨'],
+  ['pasta', '🦷'],
+  ['dental', '🦷'],
+];
+
+function getProductEmoji(name) {
+  const n = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  for (const [key, emoji] of PRODUCT_EMOJIS) {
+    if (n.includes(key)) return emoji;
+  }
+  return '📦';
+}
+
+function normalizeProductKey(name) {
+  const n = (name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (n.includes('cordyceps'))                          return 'Cordyceps';
+  if (n.includes('melena') || n.includes('lion'))       return 'Melena de León';
+  if (n.includes('reishi'))                             return 'Reishi';
+  if (n.includes('ashwagandha'))                        return 'Ashwagandha';
+  if (n.includes('creatina') || n.includes('creatine')) return 'Creatina';
+  if (n.includes('colag') || n.includes('collag'))      return 'Colágeno';
+  if (n.includes('pasta') || n.includes('dental'))      return 'Pasta Dental';
+  return name;
+}
+
+function getRankingProducts(source) {
+  const tnProds = (dashData?.top_products || []);
+  const mlProds = (mlData?.top_products   || []);
+
+  const addTicket = p => ({ ...p, canal: source === 'tn' ? 'tn' : 'ml', avg_ticket: p.quantity > 0 ? p.revenue / p.quantity : 0 });
+  if (source === 'tn') return tnProds.map(addTicket);
+  if (source === 'ml') return mlProds.map(addTicket);
+
+  // Combined: merge by normalized product key tracking canal
+  const map = {};
+  tnProds.forEach(p => {
+    const key = normalizeProductKey(p.name);
+    if (!map[key]) map[key] = { name: key, quantity: 0, revenue: 0, qty_tn: 0, qty_ml: 0 };
+    map[key].quantity += p.quantity || 0;
+    map[key].revenue  += p.revenue  || 0;
+    map[key].qty_tn   += p.quantity || 0;
+  });
+  mlProds.forEach(p => {
+    const key = normalizeProductKey(p.name);
+    if (!map[key]) map[key] = { name: key, quantity: 0, revenue: 0, qty_tn: 0, qty_ml: 0 };
+    map[key].quantity += p.quantity || 0;
+    map[key].revenue  += p.revenue  || 0;
+    map[key].qty_ml   += p.quantity || 0;
+  });
+  return Object.values(map).map(p => {
+    const canal = p.qty_tn === 0 ? 'ml' : p.qty_ml === 0 ? 'tn' : 'both';
+    return { ...p, canal, avg_ticket: p.quantity > 0 ? p.revenue / p.quantity : 0 };
+  });
+}
+
+function updateRanking(source) {
+  rankingView = source;
+  document.querySelectorAll('.ranking-tab').forEach(t => {
+    t.classList.toggle('ranking-tab--active', t.dataset.source === source);
+  });
+  const subtitles = { combined: 'Tienda Nube + Mercado Libre', tn: 'Solo Tienda Nube', ml: 'Solo Mercado Libre' };
+  const sub = el('rankingSubtitle');
+  if (sub) sub.textContent = subtitles[source] || '';
+  renderProductRanking(getRankingProducts(source));
+}
+
+function renderProductRanking(products) {
+  const section = el('productRankingSection');
+  const body    = el('productRankingBody');
+  if (!products || !products.length) { section.style.display = 'none'; return; }
+
+  const sorted       = [...products].sort((a, b) => b.revenue - a.revenue);
+  const totalRevenue = sorted.reduce((s, p) => s + p.revenue, 0);
+  const maxRevenue   = sorted[0].revenue;
+  const maxUnits     = Math.max(...sorted.map(p => p.quantity));
+  const MEDALS       = ['🥇', '🥈', '🥉'];
+
+  el('rankingBadge').textContent = `${sorted.length} productos`;
+
+  body.innerHTML = sorted.map((p, i) => {
+    const revPct     = totalRevenue > 0 ? ((p.revenue / totalRevenue) * 100).toFixed(1) : 0;
+    const revBarPct  = maxRevenue   > 0 ? ((p.revenue / maxRevenue)   * 100).toFixed(1) : 0;
+    const unitBarPct = maxUnits     > 0 ? ((p.quantity / maxUnits)    * 100).toFixed(1) : 0;
+    const emoji      = getProductEmoji(p.name);
+    const medal      = i < 3 ? MEDALS[i] : `<span class="rank-num">${i + 1}</span>`;
+    const topCls     = i === 0 ? ' ranking-row--top' : '';
+    const avgTicket  = p.avg_ticket || (p.quantity > 0 ? p.revenue / p.quantity : 0);
+    const canalBadge = p.canal === 'tn'   ? '<span class="canal-badge canal-tn">TN</span>'
+                     : p.canal === 'ml'   ? '<span class="canal-badge canal-ml">ML</span>'
+                     : '<span class="canal-badge canal-both">TN+ML</span>';
+
+    return `
+      <div class="ranking-row${topCls}">
+        <div class="ranking-medal">${medal}</div>
+        <div class="ranking-product">
+          <span class="ranking-emoji">${emoji}</span>
+          <div class="ranking-info">
+            <span class="ranking-name" title="${esc(p.name)}">${esc(p.name)} ${canalBadge}</span>
+            <div class="ranking-bar-wrap">
+              <div class="ranking-bar ranking-bar--rev" style="width:${revBarPct}%"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ranking-units">
+          <span class="ranking-units-val">${fmtNumber(p.quantity)}</span>
+          <span class="ranking-units-label">unidades</span>
+          <div class="ranking-bar-wrap ranking-bar-wrap--sm">
+            <div class="ranking-bar ranking-bar--units" style="width:${unitBarPct}%"></div>
+          </div>
+        </div>
+        <div class="ranking-revenue">
+          <span class="ranking-rev-val">${fmtMoney(p.revenue)}</span>
+          <span class="ranking-rev-pct">${revPct}% del total</span>
+        </div>
+        <div class="ranking-ticket">
+          <span class="ranking-rev-val">${avgTicket > 0 ? fmtMoney(avgTicket) : '—'}</span>
+          <span class="ranking-rev-pct">ticket prom.</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  section.style.display = 'block';
+}
+
 // Customers Chart
 function renderCustomersChart(stats) {
   destroyChart('customersChart');
@@ -602,7 +749,7 @@ function renderCustomersChart(stats) {
 function renderOrdersTable(orders) {
   const tbody = el('ordersTableBody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
     return;
   }
   tbody.innerHTML = orders.map(o => {
@@ -617,6 +764,7 @@ function renderOrdersTable(orders) {
           ${o.email ? `<div class="order-email">${esc(o.email)}</div>` : ''}
         </td>
         <td><span class="order-total">${fmtMoney(o.total)}</span></td>
+        <td style="font-weight:600;color:var(--text-muted);text-align:center">${o.units != null ? o.units : '—'}</td>
         <td><span class="status-badge status--${o.payment_status}">${PAYMENT_LABELS[o.payment_status] || o.payment_status}</span></td>
         <td><span class="status-badge ship--${o.shipping_status}">${SHIPPING_LABELS[o.shipping_status] || o.shipping_status}</span></td>
         <td><span class="status-badge status--${o.status}">${STATUS_LABELS[o.status] || o.status}</span></td>
@@ -648,6 +796,8 @@ function renderRentabilidad() {
   const cogsTN  = dashData.summary.cogs_calculado || 0;
   const cogsML  = (mlData?.summary?.cogs_calculado) || 0;
   const cogsARS = cogsTN + cogsML;
+  // ML Product Ads spend (ARS, si está disponible)
+  const mlAdsARS = (mlData?.advertising?.spend) || 0;
 
   // Plan TN: $24.999/mes prorrateado por días del período (en ARS)
   const planARS = (appConfig.plan_tienda_nube / 30) * daysInPeriod;
@@ -655,13 +805,14 @@ function renderRentabilidad() {
   // ── Convertir TODO a moneda de display ─────────────────────────────────────
   const revDisplay        = convARS(revenue);
   const adsDisplay        = convUSD(spend);
+  const mlAdsDisplay      = convARS(mlAdsARS);
   const comisionDisplay   = convARS(comisionARS);
   const comisionMLDisplay = convARS(comisionML);
   const planDisplay       = convARS(planARS);
   const shippingDisplay   = convARS(shippingOwner);
   const cogsDisplay       = convARS(cogsARS);
 
-  const totalCosts = adsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay;
+  const totalCosts = adsDisplay + mlAdsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay;
   const gain       = revDisplay - totalCosts;
   const roas       = adsDisplay > 0 ? revDisplay / adsDisplay : 0;
   const margin     = revDisplay > 0 ? (gain / revDisplay) * 100 : 0;
@@ -685,10 +836,16 @@ function renderRentabilidad() {
     el('profitSubtitle').textContent = 'Ingresos vs inversión publicitaria';
   }
 
-  el('profAds').textContent      = fmt(adsDisplay);
-  el('profAdsNote').textContent  = displayCurrency === 'ARS' && exchangeRate > 1
-    ? `USD ${fmtRawUSD(spend)} × TC ${Math.round(exchangeRate).toLocaleString('es-AR')}`
-    : 'Gasto Meta Ads';
+  // Ads: Meta + ML Product Ads (si está disponible)
+  const totalAdsDisplay = adsDisplay + mlAdsDisplay;
+  el('profAds').textContent = fmt(totalAdsDisplay);
+  if (mlAdsARS > 0) {
+    el('profAdsNote').textContent = `Meta ${fmt(adsDisplay)} + ML Ads ${fmt(mlAdsDisplay)}`;
+  } else {
+    el('profAdsNote').textContent = displayCurrency === 'ARS' && exchangeRate > 1
+      ? `USD ${fmtRawUSD(spend)} × TC ${Math.round(exchangeRate).toLocaleString('es-AR')}`
+      : 'Gasto Meta Ads';
+  }
 
   el('profComision').textContent     = fmt(comisionDisplay);
   el('profComisionNote').textContent =
@@ -711,12 +868,25 @@ function renderRentabilidad() {
   // ── Renderizar tarjetas de resultados ──────────────────────────────────────
   el('profGain').textContent    = fmt(gain);
   el('profGainNote').textContent = gain >= 0
-    ? `Ingr. − Ads − Com.TN − Com.ML − Plan − Envíos − COGS`
+    ? `Ingr. − Ads Meta${mlAdsARS > 0 ? ' − Ads ML' : ''} − Com.TN − Com.ML − Plan − Envíos − COGS`
     : '¡Costos mayores a ingresos!';
 
   el('profRoas').textContent    = roas > 0 ? `${roas.toFixed(2)}x` : '—';
   el('profMargin').textContent  = `${margin.toFixed(1)}%`;
   el('profCac').textContent     = cac > 0 ? fmt(cac) : '—';
+
+  // ── Per-unit metrics ────────────────────────────────────────────────────────
+  const totalUnitsAll = unitsSoldTN + unitsSoldML;
+  if (totalUnitsAll > 0) {
+    el('profRevUnit').textContent  = fmt(revDisplay / totalUnitsAll);
+    el('profGainUnit').textContent = fmt(gain / totalUnitsAll);
+    el('profCostUnit').textContent = fmt(totalCosts / totalUnitsAll);
+    el('profGainUnitCard').classList.toggle('negative', gain < 0);
+  } else {
+    el('profRevUnit').textContent  = '—';
+    el('profGainUnit').textContent = '—';
+    el('profCostUnit').textContent = '—';
+  }
 
   // Color ganancia
   el('profitGainCard').classList.toggle('negative', gain < 0);
@@ -736,6 +906,115 @@ function renderRentabilidad() {
   }
 
   el('profitSection').style.display = 'block';
+}
+
+// ─── Indicadores Clave ────────────────────────────────────────────────────────
+function renderIndicadoresClave() {
+  if (!dashData) return;
+  const section = el('indicadoresSection');
+
+  // Tasa de conversión Meta
+  if (metaData) {
+    const clicks    = metaData.summary.clicks    || 0;
+    const purchases = metaData.summary.purchases || 0;
+    const convRate  = clicks > 0 ? (purchases / clicks * 100) : 0;
+    el('indConvRate').textContent = clicks > 0 ? `${convRate.toFixed(2)}%` : '—';
+  }
+
+  // Costo por unidad vendida
+  if (metaData) {
+    const spend     = metaData.summary.spend || 0;
+    const unitsTN   = dashData.summary.units_sold || 0;
+    const unitsML   = mlData ? mlData.summary.units_sold : 0;
+    const totalU    = unitsTN + unitsML;
+    const adsDisp   = convUSD(spend);
+    const fmtI      = displayCurrency === 'USD'
+      ? fmtRawUSD
+      : v => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    el('indCostPerUnit').textContent = totalU > 0 ? fmtI(adsDisp / totalU) : '—';
+  }
+
+  // Envíos gratis vs pagos (TN)
+  const freeShip  = dashData.summary.free_shipping_orders || 0;
+  const paidShip  = dashData.summary.paid_shipping_orders || 0;
+  const totalShip = freeShip + paidShip;
+  if (totalShip > 0) {
+    const freePct = ((freeShip / totalShip) * 100).toFixed(0);
+    el('indFreeShipping').textContent     = String(freeShip);
+    el('indFreeShippingNote').textContent = `${freePct}% del total · ${paidShip} pagos`;
+  } else {
+    el('indFreeShipping').textContent     = '—';
+    el('indFreeShippingNote').textContent = 'Sin órdenes';
+  }
+
+  // Promedio costo de envío TN
+  const avgShip = dashData.summary.avg_shipping_cost_owner || 0;
+  el('indAvgShipping').textContent = fmtMoney(avgShip);
+
+  // Tasa cancelación ML
+  if (mlData) {
+    const cancelled = mlData.summary.cancelled_orders || 0;
+    const totalML   = mlData.summary.total_orders     || 0;
+    const rate      = totalML > 0 ? (cancelled / totalML * 100) : 0;
+    el('indMLCancelRate').textContent = totalML > 0 ? `${rate.toFixed(1)}%` : '—';
+    el('indMLCancelNote').textContent = totalML > 0
+      ? `${cancelled} canceladas de ${totalML} totales` : 'Sin datos ML';
+  } else {
+    el('indMLCancelRate').textContent = '—';
+    el('indMLCancelNote').textContent = 'Sin datos ML';
+  }
+
+  renderRevenueChannelChart();
+  section.style.display = 'block';
+}
+
+function renderRevenueChannelChart() {
+  const revTN = dashData?.summary?.revenue || 0;
+  const revML = mlData?.summary?.revenue   || 0;
+  const total = revTN + revML;
+
+  destroyChart('revenueChannelChart');
+  if (total === 0) return;
+
+  const ctx = el('revenueChannelChart').getContext('2d');
+  charts.revenueChannel = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Tienda Nube', 'Mercado Libre'],
+      datasets: [{
+        data: [revTN, revML],
+        backgroundColor: ['rgba(78,205,196,0.8)', 'rgba(255,230,0,0.8)'],
+        borderColor: '#131626', borderWidth: 3, hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d2e', borderColor: '#252a42', borderWidth: 1,
+          callbacks: {
+            label: ctx => {
+              const raw = displayCurrency === 'USD' ? ctx.parsed : ctx.parsed;
+              return ` ${ctx.label}: ${fmtMoney(raw)} (${total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  el('revenueChannelLegend').innerHTML = [
+    { label: 'Tienda Nube', value: revTN, color: '#4ECDC4' },
+    { label: 'Mercado Libre', value: revML, color: '#FFE600' }
+  ].map(({ label, value, color }) => `
+    <div class="shipping-item">
+      <span class="shipping-dot" style="background:${color}"></span>
+      <span class="shipping-label">${label}</span>
+      <span class="shipping-value">${fmtMoney(value)}</span>
+      <span class="shipping-pct">${total > 0 ? ((value / total) * 100).toFixed(0) : 0}%</span>
+    </div>
+  `).join('');
 }
 
 // ─── Meta Ads ─────────────────────────────────────────────────────────────────
@@ -758,6 +1037,7 @@ async function loadMeta() {
     el('metaLoadingState').style.display = 'none';
     el('metaContent').style.display      = 'block';
     if (dashData) renderRentabilidad();
+    if (dashData) renderIndicadoresClave();
   } catch (err) {
     el('metaLoadingState').style.display = 'none';
     el('metaErrorState').style.display   = 'flex';
@@ -1135,13 +1415,29 @@ function renderML(data) {
   el('mlComisiones').textContent = fmtMoney(s.comisiones_ml);
   el('mlShipping').textContent   = fmtMoney(s.shipping_cost);
 
+  // Publicidad ML Product Ads
+  const ads = data.advertising;
+  if (ads && ads.available) {
+    el('mlAdsSpend').textContent = fmtMoney(ads.spend);
+    el('mlAdsNote').textContent  = ads.sales > 0
+      ? `${ads.sales} ventas · ROAS ${ads.roas > 0 ? ads.roas.toFixed(2) + 'x' : '—'}`
+      : `${fmtNumber(ads.clicks)} clics · ${fmtNumber(ads.impressions)} imp.`;
+    el('mlAdsNote').title        = '';
+    el('mlAdsNote').style.cursor = 'default';
+  } else {
+    el('mlAdsSpend').textContent = 'No disponible';
+    el('mlAdsNote').textContent  = '⚠ Ver nota';
+    el('mlAdsNote').title        = 'La API de Product Ads requiere el scope "write_advertising" habilitado en tu app de ML (developers.mercadolibre.com.ar). Una vez habilitado y re-autenticado, los datos aparecerán aquí automáticamente.';
+    el('mlAdsNote').style.cursor = 'help';
+  }
+
   el('mlOrdersBadge').textContent = `${data.recent_orders.length} órdenes`;
 
   renderMLSalesChart(data.sales_chart, data.period, data.date_from, data.date_to);
 
   const tbody = el('mlOrdersBody');
   if (!data.recent_orders.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
     return;
   }
   tbody.innerHTML = data.recent_orders.map(o => {
@@ -1156,6 +1452,7 @@ function renderML(data) {
         <td><span class="order-number">#${o.id}</span></td>
         <td><div class="order-customer">${esc(o.buyer)}</div></td>
         <td><span class="order-total">${fmtMoney(o.total)}</span></td>
+        <td style="font-weight:600;color:var(--text-muted);text-align:center">${o.units != null ? o.units : '—'}</td>
         <td><span class="status-badge ${statusCls}">${statusLabel}</span></td>
         <td><span class="order-date">${dateStr}</span></td>
       </tr>
@@ -1176,11 +1473,16 @@ function showContent() {
   el('dashboardContent').style.display = 'block';
   if (dashData && mlData)   renderUnitsCompare();
   if (dashData && metaData) renderRentabilidad();
+  if (dashData) updateRanking(rankingView);
 }
 
 function tryRenderRentabilidad() {
   if (dashData && mlData)   renderUnitsCompare();
   if (dashData && metaData) renderRentabilidad();
+  if (dashData) {
+    renderIndicadoresClave();
+    updateRanking(rankingView);
+  }
 }
 
 function showError(msg) {
@@ -1193,14 +1495,15 @@ function showError(msg) {
 // ─── Chart registry ───────────────────────────────────────────────────────────
 function destroyChart(id) {
   const chartMap = {
-    salesChart:      'sales',
-    shippingChart:   'shipping',
-    productsChart:   'products',
-    customersChart:  'customers',
-    metaSpendChart:  'metaSpend',
-    metaClicksChart: 'metaClicks',
-    mlSalesChart:    'mlSales',
-    compareChart:    'compare'
+    salesChart:           'sales',
+    shippingChart:        'shipping',
+    productsChart:        'products',
+    customersChart:       'customers',
+    metaSpendChart:       'metaSpend',
+    metaClicksChart:      'metaClicks',
+    mlSalesChart:         'mlSales',
+    compareChart:         'compare',
+    revenueChannelChart:  'revenueChannel'
   };
   const k = chartMap[id];
   if (k && charts[k]) { charts[k].destroy(); charts[k] = null; }
