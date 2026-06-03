@@ -1563,7 +1563,11 @@ function showContent() {
   el('dashboardContent').style.display = 'block';
   if (dashData && mlData)   renderUnitsCompare();
   if (dashData && metaData) renderRentabilidad();
-  if (dashData) updateRanking(rankingView);
+  if (dashData) {
+    renderRentabilidadPorCanal();
+    renderIndicadoresClave();
+    updateRanking(rankingView);
+  }
 }
 
 function tryRenderRentabilidad() {
