@@ -314,6 +314,7 @@ function rerenderAll() {
     renderRentabilidad();
   }
   if (dashData) {
+    renderRentabilidadPorCanal();
     renderIndicadoresClave();
     updateRanking(rankingView);
   }
@@ -749,13 +750,26 @@ function renderCustomersChart(stats) {
 function renderOrdersTable(orders) {
   const tbody = el('ordersTableBody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
     return;
   }
+  // Pre-calcular costos promedio para Revenue Neto
+  const avgShipARS      = dashData ? (dashData.summary.shipping_cost_owner || 0) / Math.max(dashData.summary.orders, 1) : 0;
+  const metaPerOrderARS = (metaData && dashData && exchangeRate > 1)
+    ? metaData.summary.spend * exchangeRate / Math.max(dashData.summary.orders, 1) : 0;
+
   tbody.innerHTML = orders.map(o => {
     const date = new Date(o.created_at);
     const dateStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) +
                     ' ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    const netARS = o.total
+      - o.total * appConfig.comision_promedio
+      - avgShipARS
+      - (o.units || 0) * 2200
+      - metaPerOrderARS;
+    const netDisp  = convARS(netARS);
+    const netColor = netDisp >= 0 ? 'var(--green)' : 'var(--red)';
+    const netFmt   = displayCurrency === 'USD' ? fmtRawUSD(netDisp) : new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(netDisp);
     return `
       <tr>
         <td><span class="order-number">#${o.number || o.id}</span></td>
@@ -765,6 +779,7 @@ function renderOrdersTable(orders) {
         </td>
         <td><span class="order-total">${fmtMoney(o.total)}</span></td>
         <td style="font-weight:600;color:var(--text-muted);text-align:center">${o.units != null ? o.units : '—'}</td>
+        <td style="font-weight:700;color:${netColor};white-space:nowrap">${netFmt}</td>
         <td><span class="status-badge status--${o.payment_status}">${PAYMENT_LABELS[o.payment_status] || o.payment_status}</span></td>
         <td><span class="status-badge ship--${o.shipping_status}">${SHIPPING_LABELS[o.shipping_status] || o.shipping_status}</span></td>
         <td><span class="status-badge status--${o.status}">${STATUS_LABELS[o.status] || o.status}</span></td>
@@ -908,6 +923,75 @@ function renderRentabilidad() {
   el('profitSection').style.display = 'block';
 }
 
+// ─── Rentabilidad por Canal ───────────────────────────────────────────────────
+function renderRentabilidadPorCanal() {
+  if (!dashData) return;
+
+  const fmt = displayCurrency === 'USD'
+    ? fmtRawUSD
+    : v => new Intl.NumberFormat('es-AR', {
+        style: 'currency', currency: 'ARS',
+        minimumFractionDigits: 0, maximumFractionDigits: 0
+      }).format(v);
+
+  // ── Tienda Nube ─────────────────────────────────────────────────────────────
+  const daysInPeriod  = dashData.days_in_period || 30;
+  const revenueTN     = dashData.summary.revenue;
+  const revTNDisp     = convARS(revenueTN);
+  const tnAdsDisp     = metaData ? convUSD(metaData.summary.spend) : 0;
+  const tnComDisp     = convARS(revenueTN * appConfig.comision_promedio);
+  const tnPlanDisp    = convARS((appConfig.plan_tienda_nube / 30) * daysInPeriod);
+  const tnShipDisp    = convARS(dashData.summary.shipping_cost_owner || 0);
+  const tnCogsDisp    = convARS(dashData.summary.cogs_calculado || 0);
+  const gainTN        = revTNDisp - tnAdsDisp - tnComDisp - tnPlanDisp - tnShipDisp - tnCogsDisp;
+  const margTN        = revTNDisp > 0 ? (gainTN / revTNDisp) * 100 : 0;
+  const ordsTN        = Math.max(dashData.summary.orders, 1);
+  const unitsTN       = Math.max(dashData.summary.units_sold, 1);
+
+  el('canalTNRevenue').textContent  = fmt(revTNDisp);
+  el('canalTNAds').textContent      = metaData ? `−${fmt(tnAdsDisp)}` : '—';
+  el('canalTNComision').textContent = `−${fmt(tnComDisp)}`;
+  el('canalTNPlan').textContent     = `−${fmt(tnPlanDisp)}`;
+  el('canalTNShipping').textContent = `−${fmt(tnShipDisp)}`;
+  el('canalTNCogs').textContent     = `−${fmt(tnCogsDisp)}`;
+  el('canalTNGain').textContent     = fmt(gainTN);
+  el('canalTNGain').className       = `canal-gain-value${gainTN < 0 ? ' negative' : ''}`;
+  el('canalTNBadge').textContent    = `Margen ${margTN.toFixed(1)}%`;
+  el('canalTNMargin').textContent   = `${margTN.toFixed(1)}%`;
+  el('canalTNPerOrder').textContent = fmt(gainTN / ordsTN);
+  el('canalTNPerUnit').textContent  = dashData.summary.units_sold > 0 ? fmt(gainTN / unitsTN) : '—';
+
+  // ── Mercado Libre ────────────────────────────────────────────────────────────
+  const mlCard = el('canalMLCard');
+  if (mlData) {
+    const revML      = mlData.summary.revenue;
+    const revMLDisp  = convARS(revML);
+    const mlAdsDisp  = convARS(mlData.advertising?.spend || 0);
+    const mlComDisp  = convARS(mlData.summary.comisiones_ml || 0);
+    const mlCogsDisp = convARS(mlData.summary.cogs_calculado || 0);
+    const gainML     = revMLDisp - mlAdsDisp - mlComDisp - mlCogsDisp;
+    const margML     = revMLDisp > 0 ? (gainML / revMLDisp) * 100 : 0;
+    const ordsML     = Math.max(mlData.summary.orders, 1);
+    const unitsML    = Math.max(mlData.summary.units_sold, 1);
+
+    el('canalMLRevenue').textContent  = fmt(revMLDisp);
+    el('canalMLAds').textContent      = (mlData.advertising?.spend || 0) > 0 ? `−${fmt(mlAdsDisp)}` : '—';
+    el('canalMLComision').textContent = `−${fmt(mlComDisp)}`;
+    el('canalMLCogs').textContent     = `−${fmt(mlCogsDisp)}`;
+    el('canalMLGain').textContent     = fmt(gainML);
+    el('canalMLGain').className       = `canal-gain-value${gainML < 0 ? ' negative' : ''}`;
+    el('canalMLBadge').textContent    = `Margen ${margML.toFixed(1)}%`;
+    el('canalMLMargin').textContent   = `${margML.toFixed(1)}%`;
+    el('canalMLPerOrder').textContent = fmt(gainML / ordsML);
+    el('canalMLPerUnit').textContent  = mlData.summary.units_sold > 0 ? fmt(gainML / unitsML) : '—';
+    if (mlCard) mlCard.style.opacity = '1';
+  } else {
+    if (mlCard) mlCard.style.opacity = '0.35';
+  }
+
+  el('rentabilidadCanalSection').style.display = 'block';
+}
+
 // ─── Indicadores Clave ────────────────────────────────────────────────────────
 function renderIndicadoresClave() {
   if (!dashData) return;
@@ -1037,6 +1121,7 @@ async function loadMeta() {
     el('metaLoadingState').style.display = 'none';
     el('metaContent').style.display      = 'block';
     if (dashData) renderRentabilidad();
+    if (dashData) renderRentabilidadPorCanal();
     if (dashData) renderIndicadoresClave();
   } catch (err) {
     el('metaLoadingState').style.display = 'none';
@@ -1437,7 +1522,7 @@ function renderML(data) {
 
   const tbody = el('mlOrdersBody');
   if (!data.recent_orders.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4a5568;padding:32px">Sin órdenes en este período</td></tr>';
     return;
   }
   tbody.innerHTML = data.recent_orders.map(o => {
@@ -1447,12 +1532,17 @@ function renderML(data) {
     const statusKey = o.status || 'unknown';
     const statusLabel = ML_STATUS_LABELS[statusKey] || statusKey;
     const statusCls = `ml--${statusKey}`;
+    const mlNetARS  = o.total - o.total * 0.13 - (o.units || 0) * 2200;
+    const mlNetDisp = convARS(mlNetARS);
+    const mlNetColor = mlNetDisp >= 0 ? 'var(--green)' : 'var(--red)';
+    const mlNetFmt  = displayCurrency === 'USD' ? fmtRawUSD(mlNetDisp) : new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(mlNetDisp);
     return `
       <tr>
         <td><span class="order-number">#${o.id}</span></td>
         <td><div class="order-customer">${esc(o.buyer)}</div></td>
         <td><span class="order-total">${fmtMoney(o.total)}</span></td>
         <td style="font-weight:600;color:var(--text-muted);text-align:center">${o.units != null ? o.units : '—'}</td>
+        <td style="font-weight:700;color:${mlNetColor};white-space:nowrap">${mlNetFmt}</td>
         <td><span class="status-badge ${statusCls}">${statusLabel}</span></td>
         <td><span class="order-date">${dateStr}</span></td>
       </tr>
@@ -1480,6 +1570,7 @@ function tryRenderRentabilidad() {
   if (dashData && mlData)   renderUnitsCompare();
   if (dashData && metaData) renderRentabilidad();
   if (dashData) {
+    renderRentabilidadPorCanal();
     renderIndicadoresClave();
     updateRanking(rankingView);
   }

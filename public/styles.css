@@ -1097,3 +1097,125 @@ body {
 
 /* ─── Profit grid results: soporte para tarjetas extra ─────────────────────── */
 .profit-grid--results { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+/* ─── Rentabilidad por Canal ────────────────────────────────────────────────── */
+.canal-section {
+  background: linear-gradient(135deg, #0f1627 0%, #111823 100%);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.canal-section::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #4ECDC4 0%, transparent 40%, transparent 60%, #FFE600 100%);
+}
+.canal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) { .canal-grid { grid-template-columns: 1fr; } }
+
+.canal-card {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.canal-card--tn { border: 1px solid rgba(78,205,196,0.25); }
+.canal-card--ml { border: 1px solid rgba(255,230,0,0.2); }
+
+.canal-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.canal-card-title { font-size: 15px; font-weight: 700; }
+.canal-card--tn .canal-card-title { color: #4ECDC4; }
+.canal-card--ml .canal-card-title { color: #FFE600; }
+
+.canal-card-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.canal-card--tn .canal-card-badge { background: rgba(78,205,196,.15); color: #4ECDC4; }
+.canal-card--ml .canal-card-badge { background: rgba(255,230,0,.12); color: #c8a000; }
+
+.canal-revenue {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.canal-revenue-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+.canal-revenue-value { font-size: 18px; font-weight: 700; color: var(--text); }
+
+.canal-costs { display: flex; flex-direction: column; gap: 7px; }
+.canal-cost-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.canal-cost-label { color: var(--text-muted); }
+.canal-cost-value { font-weight: 600; color: #f87171; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.canal-gain {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255,255,255,0.1);
+}
+.canal-gain-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+.canal-gain-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums;
+}
+.canal-card--tn .canal-gain-value { color: #4ECDC4; }
+.canal-card--ml .canal-gain-value { color: #FFE600; }
+.canal-gain-value.negative { color: var(--red) !important; }
+
+.canal-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.canal-metric {
+  text-align: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 8px 4px;
+}
+.canal-metric-val {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.canal-metric-label {
+  display: block;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

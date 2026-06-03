@@ -215,6 +215,115 @@
         </div>
       </section>
 
+      <!-- ══════════════════ RENTABILIDAD POR CANAL ══════════════════ -->
+      <section class="canal-section" id="rentabilidadCanalSection" style="display:none">
+        <div class="profit-header">
+          <div>
+            <h2 class="profit-title">Rentabilidad por Canal</h2>
+            <p class="profit-subtitle">Desglose de ganancia neta — Tienda Nube vs Mercado Libre</p>
+          </div>
+        </div>
+        <div class="canal-grid">
+
+          <!-- TN Card -->
+          <div class="canal-card canal-card--tn">
+            <div class="canal-card-header">
+              <span class="canal-card-title">🏪 Tienda Nube</span>
+              <span class="canal-card-badge" id="canalTNBadge">—</span>
+            </div>
+            <div class="canal-revenue">
+              <span class="canal-revenue-label">Ingresos</span>
+              <span class="canal-revenue-value" id="canalTNRevenue">—</span>
+            </div>
+            <div class="canal-costs">
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Meta Ads</span>
+                <span class="canal-cost-value" id="canalTNAds">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Comisiones Pago Nube</span>
+                <span class="canal-cost-value" id="canalTNComision">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Plan Tienda Nube</span>
+                <span class="canal-cost-value" id="canalTNPlan">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Envíos Andreani</span>
+                <span class="canal-cost-value" id="canalTNShipping">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">COGS</span>
+                <span class="canal-cost-value" id="canalTNCogs">—</span>
+              </div>
+            </div>
+            <div class="canal-gain">
+              <span class="canal-gain-label">Ganancia Neta TN</span>
+              <span class="canal-gain-value" id="canalTNGain">—</span>
+            </div>
+            <div class="canal-metrics">
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalTNMargin">—</span>
+                <span class="canal-metric-label">Margen</span>
+              </div>
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalTNPerOrder">—</span>
+                <span class="canal-metric-label">Por Orden</span>
+              </div>
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalTNPerUnit">—</span>
+                <span class="canal-metric-label">Por Unidad</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ML Card -->
+          <div class="canal-card canal-card--ml" id="canalMLCard">
+            <div class="canal-card-header">
+              <span class="canal-card-title">🛒 Mercado Libre</span>
+              <span class="canal-card-badge" id="canalMLBadge">—</span>
+            </div>
+            <div class="canal-revenue">
+              <span class="canal-revenue-label">Ingresos</span>
+              <span class="canal-revenue-value" id="canalMLRevenue">—</span>
+            </div>
+            <div class="canal-costs">
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Publicidad ML</span>
+                <span class="canal-cost-value" id="canalMLAds">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">Comisiones ML</span>
+                <span class="canal-cost-value" id="canalMLComision">—</span>
+              </div>
+              <div class="canal-cost-item">
+                <span class="canal-cost-label">COGS</span>
+                <span class="canal-cost-value" id="canalMLCogs">—</span>
+              </div>
+            </div>
+            <div class="canal-gain">
+              <span class="canal-gain-label">Ganancia Neta ML</span>
+              <span class="canal-gain-value" id="canalMLGain">—</span>
+            </div>
+            <div class="canal-metrics">
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalMLMargin">—</span>
+                <span class="canal-metric-label">Margen</span>
+              </div>
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalMLPerOrder">—</span>
+                <span class="canal-metric-label">Por Orden</span>
+              </div>
+              <div class="canal-metric">
+                <span class="canal-metric-val" id="canalMLPerUnit">—</span>
+                <span class="canal-metric-label">Por Unidad</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       <!-- ══════════════════ INDICADORES CLAVE ══════════════════ -->
       <section class="indicadores-section" id="indicadoresSection" style="display:none">
         <div class="profit-header">
@@ -455,6 +564,7 @@
                 <th>Cliente</th>
                 <th>Total</th>
                 <th>Uds.</th>
+                <th>Rev. Neto</th>
                 <th>Pago</th>
                 <th>Envío</th>
                 <th>Estado</th>
@@ -605,6 +715,7 @@
                   <th>Comprador</th>
                   <th>Total</th>
                   <th>Uds.</th>
+                  <th>Rev. Neto</th>
                   <th>Estado</th>
                   <th>Fecha</th>
                 </tr>
