@@ -57,7 +57,8 @@ body {
 .header-left { display: flex; align-items: center; gap: 16px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.logo { display: flex; align-items: baseline; gap: 4px; }
+.logo { display: flex; align-items: center; }
+.brand-logo { display: block; width: 112px; height: 34px; object-fit: contain; }
 .logo-pur {
   font-size: 22px;
   font-weight: 700;
