@@ -4,11 +4,12 @@
   "description": "Dashboard de métricas para PÜR Nootropics",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node ml-server.js",
+    "dev": "node --watch ml-server.js",
+    "test": "node --test"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "22.x"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
