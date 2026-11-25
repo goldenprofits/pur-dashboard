@@ -34,7 +34,7 @@ const PAYMENT_LABELS = {
 };
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let currentPeriod   = 'week';
+let currentPeriod   = 'day';
 let customDateFrom  = null;
 let customDateTo    = null;
 let displayCurrency = 'ARS';   // 'ARS' | 'USD'
@@ -650,7 +650,7 @@ function updateRanking(source) {
   });
   const subtitles = { combined: 'Tienda Nube + Mercado Libre', tn: 'Solo Tienda Nube', ml: 'Solo Mercado Libre' };
   const sub = el('rankingSubtitle');
-  if (sub) sub.textContent = subtitles[source] || '';
+  if (sub) sub.textContent = source === 'combined' && (!dashData || !mlData) ? 'Datos del canal conectado · falta completar el otro canal' : subtitles[source] || '';
   renderProductRanking(getRankingProducts(source));
 }
 
@@ -1001,7 +1001,7 @@ function renderRentabilidadPorCanal() {
     el('canalMLComision').textContent = `−${fmt(mlComDisp)}`;
     el('canalMLCogs').textContent     = `−${fmt(mlCogsDisp)}`;
     el('canalMLGain').textContent     = complete ? fmt(gainML) : 'Pendiente';
-    el('canalMLGain').title           = (mlData.summary.missing || []).join(' ');
+    el('canalMLGain').title           = (mlData.summary.missing || []).join(' ') || 'Resultado operativo después de publicidad, comisiones, mercadería y envío. Antes de impuestos y gastos no cargados.';
     el('canalMLGain').className       = `canal-gain-value${gainML < 0 ? ' negative' : ''}`;
     el('canalMLBadge').textContent    = complete ? `Margen ${margML.toFixed(1)}%` : 'Faltan datos';
     el('canalMLMargin').textContent   = complete ? `${margML.toFixed(1)}%` : '—';
