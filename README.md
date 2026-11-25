@@ -21,3 +21,7 @@ Product Ads usa descubrimiento del anunciante PADS y búsqueda de campañas para
 Las consultas de ventas/envíos/publicidad tienen caché de 5 minutos. La configuración de costos se recalcula inmediatamente sobre la misma consulta. Los datos de compradores no se muestran ni guardan en el volumen. El diseño admite escritorio y móvil.
 
 Documentación oficial consultada: [Product Ads](https://developers.mercadolibre.com.ar/product-ads-para-catalogo-y-user-products-lectura), [órdenes](https://developers.mercadolibre.com.ar/gestiona-ventas), [envíos](https://developers.mercadolibre.com.ar/envios).
+
+## Recuperación de gasto Meta
+
+Si la conexión de Meta falla, `/api/meta` puede usar una consulta diaria verificada importada por sesión privada en `/api/meta-snapshot`. Se valida la cuenta y moneda USD, la cobertura diaria completa y la conciliación con los totales mensuales. Las fechas fuera de cobertura siguen sin datos. La interfaz muestra el corte de la consulta, avisa que debe renovarse la conexión automática y conserva las compras/ventas no disponibles como desconocidas. Los importes convertidos a pesos son estimaciones al tipo de cambio mostrado, no cargos bancarios históricos. Esta recuperación se guarda solo en el volumen privado; nunca en Git.

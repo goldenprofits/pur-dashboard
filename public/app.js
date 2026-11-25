@@ -809,7 +809,7 @@ function renderRentabilidad() {
     if (metaSpend !== null || mlSpend !== null) {
       const amount = (metaSpend || 0) + (mlSpend || 0);
       el('profAds').textContent = displayCurrency === 'USD' ? fmtRawUSD(amount) : fmtMoney(amount);
-      el('profAdsNote').textContent = `Meta ${metaData ? fmtRawUSD(metaData.summary.spend) : 'sin datos'} + ML ${mlSpend !== null ? fmtMoney(mlData.advertising.spend) : 'sin datos'}${metaSpend === null || mlSpend === null ? ' · Total parcial' : ''}${displayCurrency === 'ARS' && metaData ? ' · conversión estimada al TC mostrado' : ''}`;
+      el('profAdsNote').textContent = `Meta USD ${metaData ? fmtRawUSD(metaData.summary.spend) : 'sin datos'} + ML ${mlSpend !== null ? fmtMoney(mlData.advertising.spend) : 'sin datos'}${metaSpend === null || mlSpend === null ? ' · Total parcial' : ''}${displayCurrency === 'ARS' && metaData ? ' · conversión estimada al TC mostrado' : ''}`;
     }
     if (mlData) {
       el('profComision').textContent = '—';
@@ -1032,11 +1032,13 @@ function renderIndicadoresClave() {
   const section = el('indicadoresSection');
 
   // Tasa de conversión Meta
-  if (metaData) {
+  if (metaData && Number.isFinite(metaData.summary.purchases)) {
     const clicks    = metaData.summary.clicks    || 0;
     const purchases = metaData.summary.purchases || 0;
     const convRate  = clicks > 0 ? (purchases / clicks * 100) : 0;
     el('indConvRate').textContent = clicks > 0 ? `${convRate.toFixed(2)}%` : '—';
+  } else {
+    el('indConvRate').textContent = '—';
   }
 
   // Costo por unidad vendida
@@ -1191,6 +1193,7 @@ function renderMeta(data) {
   renderMetaSpendChart(data.daily, data.period, data.date_from, data.date_to);
   renderMetaClicksChart(data.daily);
   renderMetaCampaigns(data.campaigns);
+  if (data.recovered) el('metaCampaignsBadge').textContent = 'Detalle pendiente';
   if (data.recovered) el('metaCampaignsBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px">El gasto fue recuperado por día. El detalle de campañas requiere renovar la conexión.</td></tr>';
 }
 
