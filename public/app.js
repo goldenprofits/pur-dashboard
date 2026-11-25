@@ -47,6 +47,12 @@ let charts          = {};
 let appConfig       = { comision_promedio: 0.05, plan_tienda_nube: 24999 };
 let rankingView     = 'combined'; // 'combined' | 'tn' | 'ml'
 
+function apiError(data, status) {
+  if (data.details?.description === 'App disabled for store until payment') return 'Tienda Nube tiene deshabilitada la aplicación hasta regularizar el pago del plan.';
+  if (typeof data.details === 'string' && /access token|session has been invalidated/i.test(data.details)) return 'La conexión con Meta venció. Hace falta volver a conectar la cuenta.';
+  return data.details?.message || (typeof data.details === 'string' ? data.details : null) || data.error || `HTTP ${status}`;
+}
+
 // ─── Currency helpers ─────────────────────────────────────────────────────────
 
 // Convierte un valor en ARS → moneda de display
@@ -313,8 +319,8 @@ function rerenderAll() {
   if (dashData && metaData) {
     renderRentabilidad();
   }
-  if (dashData) {
-    renderRentabilidadPorCanal();
+  if (dashData || mlData) renderRentabilidadPorCanal();
+  if (dashData || mlData) {
     renderIndicadoresClave();
     updateRanking(rankingView);
   }
@@ -359,12 +365,13 @@ async function loadDashboard() {
       url = `/api/dashboard?period=${currentPeriod}`;
     }
     const resp = await fetch(url);
-    if (!resp.ok) { const e = await resp.json(); throw new Error(e.details || e.error || `HTTP ${resp.status}`); }
+    if (!resp.ok) throw new Error(apiError(await resp.json(), resp.status));
     dashData = await resp.json();
     currency = dashData.currency || 'ARS';
     renderDashboard(dashData);
     showContent();
   } catch (err) {
+    dashData = null;
     showError(err.message);
   }
 }
@@ -791,7 +798,15 @@ function renderOrdersTable(orders) {
 
 // ─── Rentabilidad ─────────────────────────────────────────────────────────────
 function renderRentabilidad() {
-  if (!dashData || !metaData) return;
+  if (!dashData || !metaData || !mlData || mlData.summary.profit === null) {
+    ['profRevenue','profAds','profComision','profPlan','profShipping','profCogs','profGain','profRoas','profMargin','profCac','profRevUnit','profGainUnit','profCostUnit'].forEach(id => el(id).textContent = '—');
+    el('profGain').textContent = 'Pendiente';
+    el('profitBadge').textContent = 'Faltan datos';
+    el('profitSubtitle').textContent = 'La ganancia total requiere los datos de todos los canales';
+    el('profGainNote').textContent = 'Revisá el estado de conexión de cada canal';
+    el('profitSection').style.display = 'block';
+    return;
+  }
 
   // ── Valores base (siempre en ARS nativo o USD nativo) ──────────────────────
   const revenueTN    = dashData.summary.revenue;   // ARS
@@ -827,7 +842,7 @@ function renderRentabilidad() {
   const shippingDisplay   = convARS(shippingOwner + (mlData?.summary?.shipping_cost || 0));
   const cogsDisplay       = convARS(cogsARS);
 
-  const totalCosts = adsDisplay + mlAdsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay;
+  const totalCosts = adsDisplay + mlAdsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay + convARS(mlData.summary.extra || 0);
   const gain       = revDisplay - totalCosts;
   const roas       = adsDisplay > 0 ? revDisplay / adsDisplay : 0;
   const margin     = revDisplay > 0 ? (gain / revDisplay) * 100 : 0;
@@ -872,7 +887,7 @@ function renderRentabilidad() {
   el('profCogs').textContent     = fmt(cogsDisplay);
   const totalUnits = unitsSoldTN + unitsSoldML;
   el('profCogsNote').textContent = totalUnits > 0
-    ? `${totalUnits} u. (TN ${unitsSoldTN} + ML ${unitsSoldML}) — Pasta $2.200 / Gummies $5.000`
+    ? `${totalUnits} u. (TN ${unitsSoldTN} + ML ${unitsSoldML}) · Costos vigentes confirmados`
     : 'Sin ventas';
 
   el('profShippingNote').textContent = orders > 0 ? `Costo real Andreani ( órdenes)` : 'Sin envíos';
@@ -925,7 +940,7 @@ function renderRentabilidad() {
 
 // ─── Rentabilidad por Canal ───────────────────────────────────────────────────
 function renderRentabilidadPorCanal() {
-  if (!dashData) return;
+  if (!dashData && !mlData) return;
 
   const fmt = displayCurrency === 'USD'
     ? fmtRawUSD
@@ -935,6 +950,7 @@ function renderRentabilidadPorCanal() {
       }).format(v);
 
   // ── Tienda Nube ─────────────────────────────────────────────────────────────
+  if (dashData) {
   const daysInPeriod  = dashData.days_in_period || 30;
   const revenueTN     = dashData.summary.revenue;
   const revTNDisp     = convARS(revenueTN);
@@ -954,12 +970,17 @@ function renderRentabilidadPorCanal() {
   el('canalTNPlan').textContent     = `−${fmt(tnPlanDisp)}`;
   el('canalTNShipping').textContent = `−${fmt(tnShipDisp)}`;
   el('canalTNCogs').textContent     = `−${fmt(tnCogsDisp)}`;
-  el('canalTNGain').textContent     = fmt(gainTN);
+  el('canalTNGain').textContent     = metaData ? fmt(gainTN) : 'Pendiente';
   el('canalTNGain').className       = `canal-gain-value${gainTN < 0 ? ' negative' : ''}`;
-  el('canalTNBadge').textContent    = `Margen ${margTN.toFixed(1)}%`;
-  el('canalTNMargin').textContent   = `${margTN.toFixed(1)}%`;
-  el('canalTNPerOrder').textContent = fmt(gainTN / ordsTN);
-  el('canalTNPerUnit').textContent  = dashData.summary.units_sold > 0 ? fmt(gainTN / unitsTN) : '—';
+  el('canalTNBadge').textContent    = metaData ? `Margen ${margTN.toFixed(1)}%` : 'Falta Meta Ads';
+  el('canalTNMargin').textContent   = metaData ? `${margTN.toFixed(1)}%` : '—';
+  el('canalTNPerOrder').textContent = metaData ? fmt(gainTN / ordsTN) : '—';
+  el('canalTNPerUnit').textContent  = metaData && dashData.summary.units_sold > 0 ? fmt(gainTN / unitsTN) : '—';
+  } else {
+    ['canalTNRevenue','canalTNAds','canalTNComision','canalTNPlan','canalTNShipping','canalTNCogs','canalTNMargin','canalTNPerOrder','canalTNPerUnit'].forEach(id => el(id).textContent = '—');
+    el('canalTNGain').textContent = 'Pendiente';
+    el('canalTNBadge').textContent = 'Sin conexión';
+  }
 
   // ── Mercado Libre ────────────────────────────────────────────────────────────
   const mlCard = el('canalMLCard');
@@ -969,21 +990,23 @@ function renderRentabilidadPorCanal() {
     const mlAdsDisp  = convARS(mlData.advertising?.spend || 0);
     const mlComDisp  = convARS(mlData.summary.comisiones_ml || 0);
     const mlCogsDisp = convARS(mlData.summary.cogs_calculado || 0);
-    const gainML     = revMLDisp - mlAdsDisp - mlComDisp - mlCogsDisp - convARS(mlData.summary.shipping_cost || 0) - convARS(mlData.summary.extra || 0);
+    const complete   = mlData.summary.profit !== null;
+    const gainML     = complete ? convARS(mlData.summary.profit) : null;
     const margML     = revMLDisp > 0 ? (gainML / revMLDisp) * 100 : 0;
     const ordsML     = Math.max(mlData.summary.orders, 1);
     const unitsML    = Math.max(mlData.summary.units_sold, 1);
 
     el('canalMLRevenue').textContent  = fmt(revMLDisp);
-    el('canalMLAds').textContent      = (mlData.advertising?.spend || 0) > 0 ? `−${fmt(mlAdsDisp)}` : '—';
+    el('canalMLAds').textContent      = mlData.advertising?.available ? `−${fmt(mlAdsDisp)}` : '—';
     el('canalMLComision').textContent = `−${fmt(mlComDisp)}`;
     el('canalMLCogs').textContent     = `−${fmt(mlCogsDisp)}`;
-    el('canalMLGain').textContent     = fmt(gainML);
+    el('canalMLGain').textContent     = complete ? fmt(gainML) : 'Pendiente';
+    el('canalMLGain').title           = (mlData.summary.missing || []).join(' ');
     el('canalMLGain').className       = `canal-gain-value${gainML < 0 ? ' negative' : ''}`;
-    el('canalMLBadge').textContent    = `Margen ${margML.toFixed(1)}%`;
-    el('canalMLMargin').textContent   = `${margML.toFixed(1)}%`;
-    el('canalMLPerOrder').textContent = fmt(gainML / ordsML);
-    el('canalMLPerUnit').textContent  = mlData.summary.units_sold > 0 ? fmt(gainML / unitsML) : '—';
+    el('canalMLBadge').textContent    = complete ? `Margen ${margML.toFixed(1)}%` : 'Faltan datos';
+    el('canalMLMargin').textContent   = complete ? `${margML.toFixed(1)}%` : '—';
+    el('canalMLPerOrder').textContent = complete ? fmt(gainML / ordsML) : '—';
+    el('canalMLPerUnit').textContent  = complete && mlData.summary.units_sold > 0 ? fmt(gainML / unitsML) : '—';
     if (mlCard) mlCard.style.opacity = '1';
   } else {
     if (mlCard) mlCard.style.opacity = '0.35';
@@ -994,7 +1017,7 @@ function renderRentabilidadPorCanal() {
 
 // ─── Indicadores Clave ────────────────────────────────────────────────────────
 function renderIndicadoresClave() {
-  if (!dashData) return;
+  if (!dashData && !mlData) return;
   const section = el('indicadoresSection');
 
   // Tasa de conversión Meta
@@ -1006,12 +1029,12 @@ function renderIndicadoresClave() {
   }
 
   // Costo por unidad vendida
-  if (metaData) {
+  if (metaData && dashData && mlData && mlData.advertising?.available) {
     const spend     = metaData.summary.spend || 0;
     const unitsTN   = dashData.summary.units_sold || 0;
     const unitsML   = mlData ? mlData.summary.units_sold : 0;
     const totalU    = unitsTN + unitsML;
-    const adsDisp   = convUSD(spend);
+    const adsDisp   = convUSD(spend) + convARS(mlData.advertising.spend);
     const fmtI      = displayCurrency === 'USD'
       ? fmtRawUSD
       : v => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
@@ -1019,6 +1042,7 @@ function renderIndicadoresClave() {
   }
 
   // Envíos gratis vs pagos (TN)
+  if (dashData) {
   const freeShip  = dashData.summary.free_shipping_orders || 0;
   const paidShip  = dashData.summary.paid_shipping_orders || 0;
   const totalShip = freeShip + paidShip;
@@ -1034,6 +1058,11 @@ function renderIndicadoresClave() {
   // Promedio costo de envío TN
   const avgShip = dashData.summary.avg_shipping_cost_owner || 0;
   el('indAvgShipping').textContent = fmtMoney(avgShip);
+  } else {
+    el('indAvgShipping').textContent = '—';
+    el('indFreeShipping').textContent = '—';
+    el('indFreeShippingNote').textContent = 'Tienda Nube sin conexión';
+  }
 
   // Tasa cancelación ML
   if (mlData) {
@@ -1058,6 +1087,7 @@ function renderRevenueChannelChart() {
   const total = revTN + revML;
 
   destroyChart('revenueChannelChart');
+  if (!dashData || !mlData) { el('revenueChannelLegend').textContent = 'Comparativo pendiente: falta conectar un canal'; return; }
   if (total === 0) return;
 
   const ctx = el('revenueChannelChart').getContext('2d');
@@ -1115,15 +1145,17 @@ async function loadMeta() {
       url = `/api/meta?period=${currentPeriod}`;
     }
     const resp = await fetch(url);
-    if (!resp.ok) { const e = await resp.json(); throw new Error(e.details || e.error || `HTTP ${resp.status}`); }
+    if (!resp.ok) throw new Error(apiError(await resp.json(), resp.status));
     metaData = await resp.json();
     renderMeta(metaData);
     el('metaLoadingState').style.display = 'none';
     el('metaContent').style.display      = 'block';
-    if (dashData) renderRentabilidad();
-    if (dashData) renderRentabilidadPorCanal();
+    renderRentabilidad();
+    if (dashData || mlData) renderRentabilidadPorCanal();
     if (dashData) renderIndicadoresClave();
   } catch (err) {
+    metaData = null;
+    tryRenderRentabilidad();
     el('metaLoadingState').style.display = 'none';
     el('metaErrorState').style.display   = 'flex';
     el('metaErrorMessage').textContent   = err.message;
@@ -1302,7 +1334,14 @@ function renderMetaCampaigns(campaigns) {
 
 // ─── Unidades + Comparativo ───────────────────────────────────────────────────
 function renderUnitsCompare() {
-  if (!dashData || !mlData) return;
+  if (!dashData || !mlData) {
+    el('unitsTN').textContent = dashData ? fmtNumber(dashData.summary.units_sold) : '—';
+    el('unitsML').textContent = mlData ? fmtNumber(mlData.summary.units_sold) : '—';
+    el('unitsTotal').textContent = '—';
+    destroyChart('compareChart');
+    el('unitsCompareSection').style.display = 'block';
+    return;
+  }
 
   const unitsTN    = dashData.summary.units_sold || 0;
   const unitsML    = mlData.summary.units_sold   || 0;
@@ -1473,13 +1512,15 @@ async function loadML() {
       url = `/api/mercadolibre?period=${currentPeriod}`;
     }
     const resp = await fetch(url);
-    if (!resp.ok) { const e = await resp.json(); throw new Error(e.details || e.error || `HTTP ${resp.status}`); }
+    if (!resp.ok) throw new Error(apiError(await resp.json(), resp.status));
     mlData = await resp.json();
     renderML(mlData);
     el('mlLoadingState').style.display = 'none';
     el('mlContent').style.display      = 'block';
     tryRenderRentabilidad();
   } catch (err) {
+    mlData = null;
+    tryRenderRentabilidad();
     el('mlLoadingState').style.display = 'none';
     el('mlErrorState').style.display   = 'flex';
     el('mlErrorMessage').textContent   = err.message;
@@ -1512,7 +1553,7 @@ function renderML(data) {
   } else {
     el('mlAdsSpend').textContent = 'No disponible';
     el('mlAdsNote').textContent  = '⚠ Ver nota';
-    el('mlAdsNote').title        = 'La API de Product Ads requiere el scope "write_advertising" habilitado en tu app de ML (developers.mercadolibre.com.ar). Una vez habilitado y re-autenticado, los datos aparecerán aquí automáticamente.';
+    el('mlAdsNote').title        = ads?.error || 'No se pudo obtener la publicidad del período. La ganancia queda pendiente.';
     el('mlAdsNote').style.cursor = 'help';
   }
 
@@ -1561,20 +1602,20 @@ function showContent() {
   el('loadingState').style.display    = 'none';
   el('errorState').style.display      = 'none';
   el('dashboardContent').style.display = 'block';
-  if (dashData && mlData)   renderUnitsCompare();
-  if (dashData && metaData) renderRentabilidad();
-  if (dashData) {
-    renderRentabilidadPorCanal();
+  if (dashData || mlData)   renderUnitsCompare();
+  renderRentabilidad();
+  if (dashData || mlData) renderRentabilidadPorCanal();
+  if (dashData || mlData) {
     renderIndicadoresClave();
     updateRanking(rankingView);
   }
 }
 
 function tryRenderRentabilidad() {
-  if (dashData && mlData)   renderUnitsCompare();
-  if (dashData && metaData) renderRentabilidad();
-  if (dashData) {
-    renderRentabilidadPorCanal();
+  if (dashData || mlData)   renderUnitsCompare();
+  renderRentabilidad();
+  if (dashData || mlData) renderRentabilidadPorCanal();
+  if (dashData || mlData) {
     renderIndicadoresClave();
     updateRanking(rankingView);
   }
@@ -1583,8 +1624,9 @@ function tryRenderRentabilidad() {
 function showError(msg) {
   el('loadingState').style.display    = 'none';
   el('errorState').style.display      = 'flex';
-  el('dashboardContent').style.display = 'none';
+  el('dashboardContent').style.display = 'block';
   el('errorMessage').textContent = msg;
+  tryRenderRentabilidad();
 }
 
 // ─── Chart registry ───────────────────────────────────────────────────────────

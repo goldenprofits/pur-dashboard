@@ -67,14 +67,6 @@
       <p>Cargando datos de Tienda Nube...</p>
     </div>
 
-    <!-- Error -->
-    <div id="errorState" class="error-state" style="display:none">
-      <div class="error-icon">!</div>
-      <h3>Error al cargar datos</h3>
-      <p id="errorMessage"></p>
-      <button onclick="loadDashboard()" class="btn-retry">Reintentar</button>
-    </div>
-
     <!-- Dashboard content -->
     <div id="dashboardContent" style="display:none">
 
@@ -446,6 +438,15 @@
         </div>
         <div class="section-divider-line"></div>
       </div>
+
+    <!-- Error -->
+    <div id="errorState" class="error-state" style="display:none">
+      <div class="error-icon">!</div>
+      <h3>Tienda Nube sin conexión</h3>
+      <p id="errorMessage"></p>
+      <button onclick="loadDashboard()" class="btn-retry">Reintentar</button>
+    </div>
+
 
       <!-- KPI Cards -->
       <section class="kpi-grid">

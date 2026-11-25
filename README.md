@@ -1,6 +1,6 @@
-# PÜR · Mercado Libre
+# PÜR · Dashboard de métricas
 
-Dashboard privado de ventas, Product Ads y resultado operativo. `npm start` ejecuta `ml-server.js`. El código anterior de Tienda Nube/Meta queda conservado en `server.js` y sus archivos originales; el servicio actual se concentra en Mercado Libre.
+Dashboard privado de ventas, Product Ads y resultado operativo. `npm start` ejecuta `ml-server.js`. La página principal conserva el diseño original de Tienda Nube, Mercado Libre y Meta. El detalle de Mercado Libre y la revisión anual están en `/mercadolibre`. Cada canal informa su estado por separado; una conexión caída no oculta los demás.
 
 ## Operación
 
@@ -16,7 +16,7 @@ Ventas de órdenes pagadas por fecha de creación en UTC−03; canceladas exclui
 
 Los costos vigentes se aplican a todo el período elegido, no representan un historial de precios de adquisición. Los packs requieren costo de pack específico. Si faltan costos, comisiones, publicidad o envíos, el resultado queda pendiente. Devoluciones parciales reducen ingresos y dejan pendiente la revisión del recupero de costos. El resultado es operativo: no equivale a saldo disponible ni incluye impuestos, almacenamiento/cargos de Full o gastos fijos que no se hayan cargado. Las ventas atribuidas de Ads no se suman de nuevo a las ventas del canal.
 
-Product Ads usa descubrimiento del anunciante PADS y búsqueda de campañas para su site con `api-version: 2`, métricas y paginación. Incluye campañas pausadas con métricas dentro del período. Ceros informados se muestran como tales; si todas las métricas son cero, aparece una advertencia para contrastar con Mercado Ads. Falta de permiso/datos queda como no disponible. Rango máximo 90 días. Las órdenes se paginan y dividen por fecha si exceden el límite de búsqueda; no se truncan silenciosamente.
+Product Ads usa descubrimiento del anunciante PADS y búsqueda de campañas para su site con `api-version: 2`, métricas y paginación. Incluye campañas pausadas con métricas dentro del período. Ceros informados se muestran como tales. Falta de permiso/datos queda como no disponible. La API publicitaria permite consultar hasta 90 días hacia atrás; el histórico auditado de facturación se guarda por separado en el volumen mediante `/api/annual-review`, sin datos privados en Git. Las fechas del dashboard admiten hasta un año, pero no se calcula ganancia si faltan datos publicitarios del rango. Las órdenes se paginan y dividen por fecha si exceden el límite de búsqueda; no se truncan silenciosamente.
 
 Las consultas de ventas/envíos/publicidad tienen caché de 5 minutos. La configuración de costos se recalcula inmediatamente sobre la misma consulta. Los datos de compradores no se muestran ni guardan en el volumen. El diseño admite escritorio y móvil.
 
