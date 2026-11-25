@@ -6,6 +6,7 @@ const store = require('./lib/store');
 const ml = require('./lib/mercadolibre');
 const { ledger, arDate } = require('./lib/ledger');
 const { validateReview } = require('./lib/annual-review');
+const { validateSnapshot } = require('./lib/meta-recovery');
 const legacyApp = require('./server');
 const app = express();
 app.set('trust proxy', 1);
@@ -130,6 +131,14 @@ app.post('/api/annual-review', (req,res) => {
     store.write('annual-review.json', review);
     res.json({ ok: true, totals: review.totals });
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/meta-snapshot', (req,res) => {
+  try {
+    const snapshot = validateSnapshot(req.body, process.env.META_AD_ACCOUNT);
+    store.write('meta-snapshot.json', snapshot);
+    legacyApp.clearCache();
+    res.json({ok:true,from:snapshot.from,to:snapshot.to,months:snapshot.months});
+  } catch(e) { res.status(400).json({error:e.message}); }
 });
 app.get('/mercadolibre', (req,res) => res.sendFile(path.join(__dirname, 'public/ml.html')));
 for (const name of ['ml.css','ml.js','pur-logo.png']) app.get(`/${name}`, (req,res) => res.sendFile(path.join(__dirname,'public',name)));

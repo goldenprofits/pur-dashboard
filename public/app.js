@@ -804,6 +804,17 @@ function renderRentabilidad() {
     el('profitBadge').textContent = 'Faltan datos';
     el('profitSubtitle').textContent = 'La ganancia total requiere los datos de todos los canales';
     el('profGainNote').textContent = 'Revisá el estado de conexión de cada canal';
+    const metaSpend = metaData ? convUSD(metaData.summary.spend) : null;
+    const mlSpend = mlData?.advertising?.available ? convARS(mlData.advertising.spend) : null;
+    if (metaSpend !== null || mlSpend !== null) {
+      const amount = (metaSpend || 0) + (mlSpend || 0);
+      el('profAds').textContent = displayCurrency === 'USD' ? fmtRawUSD(amount) : fmtMoney(amount);
+      el('profAdsNote').textContent = `Meta ${metaData ? fmtRawUSD(metaData.summary.spend) : 'sin datos'} + ML ${mlSpend !== null ? fmtMoney(mlData.advertising.spend) : 'sin datos'}${metaSpend === null || mlSpend === null ? ' · Total parcial' : ''}${displayCurrency === 'ARS' && metaData ? ' · conversión estimada al TC mostrado' : ''}`;
+    }
+    if (mlData) {
+      el('profComision').textContent = '—';
+      el('profCogs').textContent = '—';
+    }
     el('profitSection').style.display = 'block';
     return;
   }
@@ -1167,17 +1178,20 @@ function renderMeta(data) {
   el('metaSpend').textContent       = fmtAdsMoney(s.spend);
   el('metaCpm').textContent         = `CPM: ${fmtAdsMoney(s.cpm)}`;
   el('metaImpressions').textContent = fmtNumber(s.impressions);
-  el('metaReach').textContent       = `Alcance: ${fmtNumber(s.reach)}`;
+  el('metaReach').textContent       = s.reach === null ? 'Alcance no disponible' : `Alcance: ${fmtNumber(s.reach)}`;
   el('metaClicks').textContent      = fmtNumber(s.clicks);
   el('metaCtr').textContent         = `CTR: ${s.ctr.toFixed(2)}%`;
   el('metaCpc').textContent         = fmtAdsMoney(s.cpc);
   el('metaPurchases').textContent   = s.purchases > 0 ? fmtNumber(Math.round(s.purchases)) : '—';
-  el('metaRevenue').textContent     = s.revenue > 0 ? `Revenue: ${fmtAdsMoney(s.revenue)}` : 'Sin datos de píxel';
+  el('metaRevenue').textContent     = s.revenue > 0 ? `Revenue: ${fmtAdsMoney(s.revenue)}` : 'Ventas no verificadas';
+  el('metaSourceNotice').textContent = data.source_notice || '';
+  el('metaSourceNotice').style.display = data.source_notice ? 'block' : 'none';
   el('metaRoas').textContent        = s.roas > 0 ? `${s.roas.toFixed(2)}x` : '—';
 
   renderMetaSpendChart(data.daily, data.period, data.date_from, data.date_to);
   renderMetaClicksChart(data.daily);
   renderMetaCampaigns(data.campaigns);
+  if (data.recovered) el('metaCampaignsBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px">El gasto fue recuperado por día. El detalle de campañas requiere renovar la conexión.</td></tr>';
 }
 
 function renderMetaSpendChart(daily, period, dateFrom, dateTo) {

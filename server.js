@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const store = require('./lib/store');
+const { recoveredReport } = require('./lib/meta-recovery');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -505,6 +507,8 @@ app.get('/api/meta', async (req, res) => {
     setCache(cacheKey, result);
     res.json(result);
   } catch (err) {
+    const recovery = recoveredReport(store.read('meta-snapshot.json', null), req.query);
+    if (recovery) return res.json(recovery);
     console.error('Error API Meta Ads:', err.response?.data || err.message);
     res.status(500).json({
       error: 'Error al obtener datos de Meta Ads',
