@@ -286,7 +286,7 @@ app.get('/api/dashboard', async (req, res) => {
       return total + (o.products || []).reduce((s, p) => {
         const nombre = (p.name || '').toLowerCase();
         const qty = parseInt(p.quantity || 0);
-        const costo = nombre.includes('pasta') ? 2200 : 5000;
+        const costo = nombre.includes('pasta') ? Number(process.env.PASTA_UNIT_COST || 2200) : Number(process.env.GUMMY_UNIT_COST || 5000);
         return s + qty * costo;
       }, 0);
     }, 0);
@@ -319,6 +319,7 @@ app.get('/api/dashboard', async (req, res) => {
         payment_status: o.payment_status,
         shipping_status: o.shipping_status || 'unpacked',
         units: (o.products || []).reduce((s, p) => s + parseInt(p.quantity || 0), 0),
+        cogs_calculado: (o.products || []).reduce((s,p) => s + Number(p.quantity || 0) * Number((p.name || '').toLowerCase().includes('pasta') ? process.env.PASTA_UNIT_COST || 2200 : process.env.GUMMY_UNIT_COST || 5000), 0),
         created_at: o.created_at
       }));
 
@@ -1002,7 +1003,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+if (require.main === module) app.listen(PORT, () => {
   console.log('\n  PUR Nootropics Dashboard');
   console.log(`  http://localhost:${PORT}\n`);
 });
+app.clearCache = () => cache.clear();
+module.exports = app;

@@ -765,7 +765,7 @@ function renderOrdersTable(orders) {
     const netARS = o.total
       - o.total * appConfig.comision_promedio
       - avgShipARS
-      - (o.units || 0) * 2200
+      - (o.cogs_calculado || 0)
       - metaPerOrderARS;
     const netDisp  = convARS(netARS);
     const netColor = netDisp >= 0 ? 'var(--green)' : 'var(--red)';
@@ -824,7 +824,7 @@ function renderRentabilidad() {
   const comisionDisplay   = convARS(comisionARS);
   const comisionMLDisplay = convARS(comisionML);
   const planDisplay       = convARS(planARS);
-  const shippingDisplay   = convARS(shippingOwner);
+  const shippingDisplay   = convARS(shippingOwner + (mlData?.summary?.shipping_cost || 0));
   const cogsDisplay       = convARS(cogsARS);
 
   const totalCosts = adsDisplay + mlAdsDisplay + comisionDisplay + comisionMLDisplay + planDisplay + shippingDisplay + cogsDisplay;
@@ -969,7 +969,7 @@ function renderRentabilidadPorCanal() {
     const mlAdsDisp  = convARS(mlData.advertising?.spend || 0);
     const mlComDisp  = convARS(mlData.summary.comisiones_ml || 0);
     const mlCogsDisp = convARS(mlData.summary.cogs_calculado || 0);
-    const gainML     = revMLDisp - mlAdsDisp - mlComDisp - mlCogsDisp;
+    const gainML     = revMLDisp - mlAdsDisp - mlComDisp - mlCogsDisp - convARS(mlData.summary.shipping_cost || 0) - convARS(mlData.summary.extra || 0);
     const margML     = revMLDisp > 0 ? (gainML / revMLDisp) * 100 : 0;
     const ordsML     = Math.max(mlData.summary.orders, 1);
     const unitsML    = Math.max(mlData.summary.units_sold, 1);
@@ -1532,10 +1532,10 @@ function renderML(data) {
     const statusKey = o.status || 'unknown';
     const statusLabel = ML_STATUS_LABELS[statusKey] || statusKey;
     const statusCls = `ml--${statusKey}`;
-    const mlNetARS  = o.total - o.total * 0.13 - (o.units || 0) * 2200;
+    const mlNetARS  = o.net_before_ads;
     const mlNetDisp = convARS(mlNetARS);
     const mlNetColor = mlNetDisp >= 0 ? 'var(--green)' : 'var(--red)';
-    const mlNetFmt  = displayCurrency === 'USD' ? fmtRawUSD(mlNetDisp) : new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(mlNetDisp);
+    const mlNetFmt  = mlNetARS === null || mlNetARS === undefined ? '—' : displayCurrency === 'USD' ? fmtRawUSD(mlNetDisp) : new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', minimumFractionDigits:0, maximumFractionDigits:0 }).format(mlNetDisp);
     return `
       <tr>
         <td><span class="order-number">#${o.id}</span></td>

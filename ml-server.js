@@ -5,6 +5,8 @@ const path = require('node:path');
 const store = require('./lib/store');
 const ml = require('./lib/mercadolibre');
 const { ledger, arDate } = require('./lib/ledger');
+const { validateReview } = require('./lib/annual-review');
+const legacyApp = require('./server');
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -58,7 +60,7 @@ function dates(query) {
   const to = query.to || today;
   const from = query.from || arDate(new Date(Date.parse(`${today}T03:00:00Z`) - 29 * 86400000).toISOString());
   const valid = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0,10) === s;
-  if (!valid(from) || !valid(to) || to < from || to > today || Date.parse(to) - Date.parse(from) > 89 * 86400000) throw new Error('Elegí un período válido de hasta 90 días, sin fechas futuras.');
+  if (!valid(from) || !valid(to) || to < from || to > today || Date.parse(to) - Date.parse(from) > 365 * 86400000) throw new Error('Elegí un período válido de hasta un año, sin fechas futuras.');
   return { from, to };
 }
 app.get('/api/overview', async (req,res) => {
@@ -99,8 +101,38 @@ app.post('/api/settings', (req,res) => {
   store.write('settings.json', next); settings = next;
   res.json({ ok: true });
 });
-app.post('/api/refresh', (req,res) => { cache.clear(); res.json({ ok: true }); });
-app.get('/', (req,res) => res.sendFile(path.join(__dirname, 'public/ml.html')));
+app.post('/api/refresh', (req,res) => { cache.clear(); legacyApp.clearCache(); res.json({ ok: true }); });
+app.get('/api/mercadolibre', async (req,res) => {
+  try {
+    const days = req.query.period === 'day' ? 1 : req.query.period === 'month' ? 30 : 7;
+    const to = req.query.date_to || arDate(new Date().toISOString());
+    const from = req.query.date_from || arDate(new Date(Date.parse(`${to}T03:00:00Z`) - (days-1)*86400000).toISOString());
+    const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/overview?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers:{cookie:req.headers.cookie || ''}, signal:AbortSignal.timeout(180000) });
+    const d = await response.json();
+    if (!response.ok) return res.status(response.status).json(d);
+    const s = d.summary, a = d.ads;
+    res.json({ period:'custom', date_from:from, date_to:to, fetched_at:d.fetched_at,
+      summary:{ revenue:s.revenue, orders:s.orders, avg_ticket:s.orders ? s.revenue/s.orders : 0, units_sold:s.units, cogs_calculado:s.cogs, shipping_cost:s.shipping, comisiones_ml:s.fees, cancelled_orders:s.cancelled, total_orders:s.orders+s.cancelled, profit:s.profit, missing:s.missing, extra:s.extra },
+      advertising:{...a,spend:a.cost,revenue:a.total_amount,impressions:a.prints,sales:a.advertising_items_quantity,roas:a.cost>0 && a.total_amount!==null ? a.total_amount/a.cost : 0},
+      sales_chart:{labels:d.daily.map(x=>x.date),revenue:d.daily.map(x=>x.revenue),orders:d.daily.map(x=>x.orders)},
+      top_products:d.products.map(p=>({name:p.name,quantity:p.quantity,revenue:p.revenue})),
+      recent_orders:d.recent.map(o=>({...o,buyer:'Comprador',units:o.products.reduce((n,p)=>n+p.quantity,0)})) });
+  } catch(e) { res.status(502).json({error:e.message}); }
+});
+app.get('/api/annual-review', (req,res) => {
+  const review = store.read('annual-review.json', null);
+  if (!review) return res.status(404).json({ error: 'Todavía no hay una revisión anual guardada.' });
+  res.json(review);
+});
+app.post('/api/annual-review', (req,res) => {
+  try {
+    const review = validateReview(req.body, process.env.ML_USER_ID);
+    store.write('annual-review.json', review);
+    res.json({ ok: true, totals: review.totals });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/mercadolibre', (req,res) => res.sendFile(path.join(__dirname, 'public/ml.html')));
 for (const name of ['ml.css','ml.js','pur-logo.png']) app.get(`/${name}`, (req,res) => res.sendFile(path.join(__dirname,'public',name)));
+app.use(legacyApp);
 app.use((req,res) => res.sendStatus(404));
 app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('PÜR Mercado Libre dashboard ready'));

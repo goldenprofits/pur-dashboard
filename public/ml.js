@@ -78,3 +78,17 @@ $('costForm').addEventListener('submit',async e=>{
   catch(err){$('saveMessage').textContent=err.message;}finally{$('saveCosts').disabled=false;}
 });
 $('from').value=ago(29);$('to').value=today();$('from').max=today();$('to').max=today();load();
+async function loadAnnualReview(){
+  try {
+    const d=await request('/api/annual-review');
+    $('annualTitle').textContent=`Publicidad acumulada ${d.year}`;
+    $('annualCutoff').textContent=`Corte ${dateLabel(d.to)}`;
+    $('annualNet').textContent=money(d.totals.net);
+    $('annualCharges').textContent=money(d.totals.charges);
+    $('annualRefunds').textContent=money(d.totals.refunds);
+    $('annualRows').innerHTML=d.months.map(m=>`<tr><td>${new Date(d.year,m.month-1,15).toLocaleDateString('es-AR',{month:'long'})}</td><td>${money(m.charges)}</td><td>${money(m.refunds)}</td><td><strong>${money(m.net)}</strong></td></tr>`).join('');
+    $('annualNote').textContent=`${d.source}. Del ${dateLabel(d.from)} al ${dateLabel(d.to)} ${d.year}. ${d.note} Revisión guardada el ${new Date(d.checked_at).toLocaleString('es-AR',{timeZone:'America/Argentina/Cordoba'})}. Este histórico conserva ese corte y se muestra separado del período seleccionado arriba.`;
+    $('annualReview').hidden=false;
+  } catch { $('annualReview').hidden=true; }
+}
+loadAnnualReview();
