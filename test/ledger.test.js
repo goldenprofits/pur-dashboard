@@ -15,6 +15,7 @@ test('multiple units, actual per-unit fees, and shared shipment charged once',()
 test('missing ads, shipment cost, or SKU cost never silently become a full profit',()=>{
  assert.equal(calc([order(1)],{},ads).summary.profit,null);
  assert.equal(calc([order(1)],{10:0},{available:false}).summary.profit,null);
+ assert.equal(calc([order(1)],{10:0},{available:true,cost:0,needs_verification:true}).summary.profit,null);
  assert.equal(calc([order(1)],{10:0},ads,{}).summary.profit,null);
 });
 test('cancelled orders excluded and verified zero ad spend allowed',()=>{

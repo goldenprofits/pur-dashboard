@@ -31,7 +31,7 @@ function render(d) {
   $('profit').textContent=money(s.profit);$('profit').classList.toggle('negative',s.profit<0);
   document.querySelector('.metric.profit p').firstChild.textContent=a.needs_verification?'Resultado preliminar ':'Resultado operativo ';
   $('profitNote').textContent=s.profit===null?'Completá los datos pendientes para ver la ganancia.':a.needs_verification?'Revisar publicidad en cero · antes de impuestos y cargos no cargados':`${percent(s.margin)} de margen · antes de impuestos y cargos no cargados`;
-  $('spend').textContent=a.available?money(a.cost):'No disponible';
+  $('spend').textContent=a.needs_verification?'Por verificar':a.available?money(a.cost):'No disponible';
   $('spendNote').textContent=a.available?'Product Ads · gasto del mismo período':'No se considera cero: falta la consulta';
   $('orders').textContent=`${number(s.orders)} / ${number(s.units)}`;
   $('ordersNote').textContent=`${number(s.cancelled)} órdenes canceladas, excluidas`;
