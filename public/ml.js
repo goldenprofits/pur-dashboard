@@ -9,7 +9,6 @@ const ago = n => new Date(Date.parse(today()+'T03:00:00Z')-n*86400000).toISOStri
 let report, busy = false;
 async function request(url,options) {
   const r = await fetch(url,options);
-  if(r.status===401){location.href='/login';throw new Error('Tu sesión venció.');}
   const d = await r.json();if(!r.ok)throw new Error(d.error||'No se pudo completar la consulta.');return d;
 }
 async function load() {
@@ -24,6 +23,8 @@ async function load() {
 }
 function render(d) {
   const s=d.summary,a=d.ads;
+  const canEditCosts=d.permissions?.can_edit_costs===true;
+  $('costButton').hidden=!canEditCosts;$('costButton2').hidden=!canEditCosts;
   $('connection').textContent=d.account+' · conectado';
   $('rangeLabel').textContent=`${dateLabel(d.from)} → ${dateLabel(d.to)} ${d.to.slice(0,4)}${d.includes_today?' · hoy parcial':''}`;
   $('updated').textContent='Consultado '+new Date(d.fetched_at).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Cordoba'});
@@ -53,7 +54,7 @@ function render(d) {
   $('adsNote').textContent=a.available?`Cuenta ${a.advertiser} · fuente: API de Product Ads · métricas del ${dateLabel(d.from)} al ${dateLabel(d.to)}.`:a.error;
   $('campaignRows').innerHTML=a.campaigns.length?a.campaigns.map(c=>`<tr><td>${escape(c.name)}<small>${c.id}</small></td><td><span class="badge ${escape(c.status)}">${c.status==='active'?'Activa':c.status==='paused'?'Pausada':escape(c.status)}</span></td><td>${money(c.cost)}</td><td>${money(c.total_amount)}</td><td>${c.cost>0?(c.total_amount/c.cost).toFixed(2)+'x':'—'}</td></tr>`).join(''):`<tr><td colspan="5">${a.available?'Sin campañas en esta cuenta.':'Publicidad no disponible; la ganancia queda pendiente.'}</td></tr>`;
   $('productRows').innerHTML=d.products.length?d.products.map(p=>`<tr><td>${escape(p.name)}<small>${escape(p.id)}</small></td><td>${number(p.quantity)}</td><td>${money(p.revenue)}</td><td>${money(p.cost?.unit_cost)}</td><td>${p.cost?money(p.cogs):'Pendiente'}</td></tr>`).join(''):'<tr><td colspan="5">Sin ventas pagadas en el período.</td></tr>';
-  $('costReference').textContent=`Costos vigentes: pasta ${money(d.default_costs?.pasta)} y frasco de gummies ${money(d.default_costs?.gummy)}. Se aplican a todo el período consultado; podés ajustar cada publicación. Para packs, ingresá el costo del pack completo.`;
+  $('costReference').textContent=`Costos vigentes: pasta ${money(d.default_costs?.pasta)} y frasco de gummies ${money(d.default_costs?.gummy)}. Se aplican a todo el período consultado.`+(canEditCosts?' Podés ajustar cada publicación. Para packs, ingresá el costo del pack completo.':'');
   const statuses={paid:'Pagada',cancelled:'Cancelada',pending:'Pendiente',confirmed:'Confirmada'};
   $('orderRows').innerHTML=d.recent.length?d.recent.map(o=>`<tr><td>#${escape(o.id)}<small>${dateLabel(o.date)}</small></td><td>${o.products.map(p=>`${p.quantity} × ${escape(p.title)}`).join('<br>')}</td><td><span class="badge ${escape(o.status)}">${escape(statuses[o.status]||o.status)}</span></td><td>${money(o.total)}</td></tr>`).join(''):'<tr><td colspan="4">Sin órdenes en el período.</td></tr>';
 }

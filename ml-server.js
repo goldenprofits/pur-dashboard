@@ -33,7 +33,7 @@ app.use((req,res,next) => {
   next();
 });
 app.get('/api/health', (req,res) => res.json({ ok: true }));
-app.get('/login', (req,res) => res.sendFile(path.join(__dirname, 'public/ml-login.html')));
+app.get(['/login', '/ml-login.html'], (req,res) => res.redirect('/'));
 app.post('/login', (req,res) => {
   const now = Date.now(), ip = req.ip;
   const entry = attempts.get(ip);
@@ -48,11 +48,17 @@ app.post('/login', (req,res) => {
   res.redirect('/');
 });
 app.use((req,res,next) => {
+  // Dashboard viewing is public. Writes and customer CRM data still require
+  // the existing maintenance session; refreshing only invalidates read caches.
+  const read = req.method === 'GET' || req.method === 'HEAD';
+  const crm = /^\/(?:api\/)?crm(?:[/.]|$)/i.test(req.path);
+  if ((read && !crm) || (req.method === 'POST' && req.path === '/api/refresh')) return next();
   if (authenticated(req)) return next();
-  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Iniciá sesión para ver el dashboard.' });
-  return res.redirect('/login');
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'El dashboard permite consultar los datos. Esta acción requiere acceso de administración.' });
+  return res.redirect('/');
 });
-app.post('/logout', (req,res) => { res.clearCookie('pur_session'); res.redirect('/login'); });
+app.get('/api/access', (req,res) => res.json({ can_edit_costs: authenticated(req), can_view_crm: authenticated(req) }));
+app.post('/logout', (req,res) => { res.clearCookie('pur_session'); res.redirect('/'); });
 const envCost = name => process.env[name] !== undefined && Number.isFinite(Number(process.env[name])) ? Number(process.env[name]) : undefined;
 let settings = store.read('settings.json', { products: {}, period_expenses: {}, defaults: { pasta: envCost('PASTA_UNIT_COST'), gummy: envCost('GUMMY_UNIT_COST') } });
 let cache = new Map(), pending = new Map();
@@ -81,6 +87,7 @@ app.get('/api/overview', async (req,res) => {
     const report = ledger(entry.orders, entry.shipping, entry.ads, settings, from,to);
     res.json({ ...report, ads: entry.ads, from,to, account: entry.account, fetched_at: new Date(entry.at).toISOString(),
       expense: settings.period_expenses?.[key] || 0, default_costs: settings.defaults, includes_today: to === arDate(new Date().toISOString()),
+      permissions: { can_edit_costs: authenticated(req) },
       note: 'Resultado operativo de órdenes pagadas, por fecha de creación. Antes de impuestos, cargos de Full y gastos fijos que no hayas cargado. Las ventas atribuidas a Ads ya están dentro de las ventas totales.' });
   } catch (e) { console.error('ML dashboard:', e.message); res.status(502).json({ error: e.message }); }
 });
@@ -144,4 +151,5 @@ app.get('/mercadolibre', (req,res) => res.sendFile(path.join(__dirname, 'public/
 for (const name of ['ml.css','ml.js','pur-logo.png']) app.get(`/${name}`, (req,res) => res.sendFile(path.join(__dirname,'public',name)));
 app.use(legacyApp);
 app.use((req,res) => res.sendStatus(404));
-app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('PÜR Mercado Libre dashboard ready'));
+if (require.main === module) app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('PÜR Mercado Libre dashboard ready'));
+module.exports = app;

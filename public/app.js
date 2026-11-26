@@ -193,6 +193,9 @@ function getPresetDateRange(preset) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/access').then(r => r.ok ? r.json() : null).then(access => {
+    if (access?.can_view_crm) el('crmLink').style.display = '';
+  }).catch(() => {});
   // Period dropdown
   const dropdown = el('periodDropdown');
   const trigger  = el('periodTrigger');

@@ -1,6 +1,6 @@
 # PÜR · Dashboard de métricas
 
-Dashboard privado de ventas, Product Ads y resultado operativo. `npm start` ejecuta `ml-server.js`. La página principal conserva el diseño original de Tienda Nube, Mercado Libre y Meta. El detalle de Mercado Libre y la revisión anual están en `/mercadolibre`. Cada canal informa su estado por separado; una conexión caída no oculta los demás.
+Dashboard de ventas, Product Ads y resultado operativo, visible sin contraseña por pedido del usuario. `npm start` ejecuta `ml-server.js`. La página principal conserva el diseño original de Tienda Nube, Mercado Libre y Meta. El detalle de Mercado Libre y la revisión anual están en `/mercadolibre`. Cada canal informa su estado por separado; una conexión caída no oculta los demás.
 
 ## Operación
 
@@ -8,7 +8,7 @@ Node 22, `npm ci`, `npm test`, `npm start`. Variables privadas: `ML_CLIENT_ID`, 
 
 En Railway, `DATA_DIR=/data` debe apuntar al volumen persistente del servicio y debe haber una sola réplica. Se guardan tokens renovados y configuración de costos mediante reemplazo atómico. El refresh token es rotativo: no iniciar otra instancia de producción con las credenciales antiguas de las variables si el volumen ya tiene tokens nuevos. No copiar tokens a Git ni a los registros. Respaldar el volumen de forma privada.
 
-Healthcheck público: `/api/health`. Las ventas, campañas y configuración requieren la sesión del dashboard. Sesión de 30 días, contraseña privada y cookies HttpOnly/SameSite. El acceso no usa las credenciales personales de Mercado Libre. No hay acciones para editar campañas, modificar pedidos, enviar mensajes o hacer pagos.
+Las páginas del dashboard, las consultas de métricas y la actualización de caché funcionan sin sesión. `/login` y `/ml-login.html` redirigen al dashboard. Los cambios de costos, importaciones de datos y el CRM de compradores conservan la sesión administrativa existente de 30 días; sus controles se ocultan a visitantes sin sesión. `DASHBOARD_PASSWORD` y `SESSION_SECRET` se usan solo para ese mantenimiento, sin pantalla de contraseña para consultar el dashboard. No hay acciones para editar campañas, modificar pedidos, enviar mensajes o hacer pagos desde las vistas del dashboard.
 
 ## Cálculo
 
