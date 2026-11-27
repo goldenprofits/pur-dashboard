@@ -20,7 +20,7 @@
       <div class="ml-metric-grid ml-metric-highlights">${[
         ['ROAS de publicidad',a.roas,'ratio','Ingresos atribuidos a Ads / gasto Ads'],
         ['ROAS total ML',p.roas_total,'ratio','Todas las ventas ML / gasto Ads; incluye ventas orgánicas'],
-        ['Conversión de visitas',p.visit_conversion,'percent','Órdenes pagadas / visitas a publicaciones'],
+        ['Conversión de visitas estimada',p.visit_conversion,'percent','Órdenes pagadas / visitas; ver alcance al pie'],
         ['Margen después de Ads',p.margin,'percent','Resultado operativo / ventas; antes de impuestos']
       ].map(card).join('')}</div>
       ${!data.traffic?.available ? `<p class="ml-metric-notice">Visitas y conversión de visitas pendientes: ${escape(data.traffic?.error || 'Mercado Libre todavía no informó estos datos.')}</p>` : ''}

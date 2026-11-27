@@ -16,9 +16,16 @@ test('budget monitoring uses the configured average, never the different platfor
     { id: 2, status: 'active', budget: 18000, daily_budget: 35846, metrics: { ...metrics, cost: 6085.42 } },
     { id: 3, status: 'paused', budget: 60000, daily_budget: 60000, metrics }
   ];
-  axios.get = async url => ({ data: url.endsWith('/advertising/advertisers')
-    ? { advertisers: [{ advertiser_id: 123, site_id: 'MLA', advertiser_name: 'Test' }] }
-    : { paging: { total: campaigns.length }, results: campaigns } });
+  let rejectedExtraMetrics = 0;
+  axios.get = async (url, options) => {
+    if (options.params.metrics?.includes('top_impression_share')) {
+      rejectedExtraMetrics++;
+      throw { response: { status:400, data:{message:'unsupported metric'} } };
+    }
+    return { data: url.endsWith('/advertising/advertisers')
+      ? { advertisers: [{ advertiser_id: 123, site_id: 'MLA', advertiser_name: 'Test' }] }
+      : { paging: { total: campaigns.length }, results: campaigns } };
+  };
   try {
     const ml = require('../lib/mercadolibre');
     const report = await ml.ads('2026-11-26', '2026-11-26');
@@ -27,6 +34,7 @@ test('budget monitoring uses the configured average, never the different platfor
     assert.equal(active.reduce((sum, c) => sum + c.daily_budget, 0), 96000);
     assert.equal(active.reduce((sum, c) => sum + c.platform_daily_budget, 0), 180194);
     assert.equal(report.cost, 33152.52);
+    assert.equal(rejectedExtraMetrics,1);
 
     delete campaigns[0].budget;
     const missing = await ml.ads('2026-11-26', '2026-11-26');
