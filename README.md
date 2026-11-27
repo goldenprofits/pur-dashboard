@@ -18,6 +18,8 @@ Los costos vigentes se aplican a todo el período elegido, no representan un his
 
 Product Ads usa descubrimiento del anunciante PADS y búsqueda de campañas para su site con `api-version: 2`, métricas y paginación. Incluye campañas pausadas con métricas dentro del período. Ceros informados se muestran como tales. Falta de permiso/datos queda como no disponible. La API publicitaria permite consultar hasta 90 días hacia atrás; el histórico auditado de facturación se guarda por separado en el volumen mediante `/api/annual-review`, sin datos privados en Git. Las fechas del dashboard admiten hasta un año, pero no se calcula ganancia si faltan datos publicitarios del rango. Las órdenes se paginan y dividen por fecha si exceden el límite de búsqueda; no se truncan silenciosamente.
 
+En `ads.campaigns`, `daily_budget` es el presupuesto promedio diario configurado, tomado de `budget` en Mercado Ads. El campo distinto `daily_budget` de la respuesta original se conserva como `platform_daily_budget` y no se usa para alertar sobre el presupuesto autorizado. Si falta `budget`, el promedio configurado queda desconocido; no se reemplaza por el otro campo ni por cero.
+
 Las consultas de ventas/envíos/publicidad tienen caché de 5 minutos. La configuración de costos se recalcula inmediatamente sobre la misma consulta. Los datos de compradores no se muestran ni guardan en el volumen. El diseño admite escritorio y móvil.
 
 Documentación oficial consultada: [Product Ads](https://developers.mercadolibre.com.ar/product-ads-para-catalogo-y-user-products-lectura), [órdenes](https://developers.mercadolibre.com.ar/gestiona-ventas), [envíos](https://developers.mercadolibre.com.ar/envios).
