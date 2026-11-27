@@ -42,6 +42,7 @@ let exchangeRate    = 1;        // dolar blue venta (ARS por 1 USD)
 let dashData        = null;     // última respuesta de /api/dashboard
 let metaData        = null;     // última respuesta de /api/meta
 let mlData          = null;     // última respuesta de /api/mercadolibre
+let mlRequestVersion = 0;
 let currency        = 'ARS';   // moneda nativa de TN
 let charts          = {};
 let appConfig       = { comision_promedio: 0.05, plan_tienda_nube: 24999 };
@@ -1520,6 +1521,9 @@ function renderMLSalesChart(chart, period, dateFrom, dateTo) {
 
 // ─── Mercado Libre ────────────────────────────────────────────────────────────
 async function loadML() {
+  const version = ++mlRequestVersion;
+  el('mlMetricsOverview').innerHTML = '<h2>Mercado Libre · rendimiento completo</h2><p>Consultando el período seleccionado…</p>';
+  el('mlMetricsOverview').setAttribute('aria-busy','true');
   el('mlLoadingState').style.display = 'flex';
   el('mlErrorState').style.display   = 'none';
   el('mlContent').style.display      = 'none';
@@ -1533,13 +1537,20 @@ async function loadML() {
     }
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(apiError(await resp.json(), resp.status));
-    mlData = await resp.json();
+    const result = await resp.json();
+    if (version !== mlRequestVersion) return;
+    mlData = result;
     renderML(mlData);
     el('mlLoadingState').style.display = 'none';
     el('mlContent').style.display      = 'block';
+    el('dashboardContent').style.display = 'block';
+    el('loadingState').style.display = 'none';
     tryRenderRentabilidad();
   } catch (err) {
+    if (version !== mlRequestVersion) return;
     mlData = null;
+    el('mlMetricsOverview').innerHTML = `<h2>Mercado Libre · rendimiento completo</h2><p>${esc(err.message)}</p>`;
+    el('mlMetricsOverview').setAttribute('aria-busy','false');
     tryRenderRentabilidad();
     el('mlLoadingState').style.display = 'none';
     el('mlErrorState').style.display   = 'flex';
@@ -1552,6 +1563,7 @@ const ML_STATUS_LABELS = {
 };
 
 function renderML(data) {
+  window.renderMLMetrics(el('mlMetricsOverview'), data, { money:fmtMoney });
   const s = data.summary;
   el('mlRevenue').textContent    = fmtMoney(s.revenue);
   el('mlOrders').textContent     = fmtNumber(s.orders);

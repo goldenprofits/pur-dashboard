@@ -8,6 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/ml-metrics.css" />
+  <script src="/ml-metrics.js" defer></script>
 </head>
 <body>
   <!-- Header -->
@@ -67,12 +69,13 @@
 
     <!-- Dashboard content -->
     <div id="dashboardContent" style="display:none">
+      <section id="mlMetricsOverview" class="ml-metrics-dashboard" aria-label="Métricas completas de Mercado Libre" aria-busy="true"><h2>Mercado Libre · rendimiento completo</h2><p>Consultando ventas, publicidad, visitas y márgenes…</p></section>
 
       <!-- ══════════════════ 1. RENTABILIDAD ══════════════════ -->
       <section class="profit-section" id="profitSection" style="display:none">
         <div class="profit-header">
           <div>
-            <h2 class="profit-title">Rentabilidad</h2>
+            <h2 class="profit-title">Rentabilidad general · todos los canales</h2>
             <p class="profit-subtitle" id="profitSubtitle">Ingresos vs inversión publicitaria</p>
           </div>
           <span class="profit-badge" id="profitBadge"></span>

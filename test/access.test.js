@@ -16,6 +16,7 @@ const ml = require('../lib/mercadolibre');
 ml.get = async () => ({ id: 'test-seller', nickname: 'PÜR prueba' });
 ml.orders = async () => [];
 ml.ads = async () => ({ available: true, cost: 0, campaigns: [] });
+ml.visits = async () => ({ available: true, visits: 100 });
 ml.shipping = async () => ({});
 const app = require('../ml-server');
 let server, base;
@@ -40,6 +41,8 @@ test('anonymous visitors can open both dashboards and load metrics without login
   const report = await response.json();
   assert.equal(report.account, 'PÜR prueba');
   assert.equal(report.permissions.can_edit_costs, false);
+  assert.equal(report.traffic.visits, 100);
+  assert.equal(report.performance.visit_conversion, 0);
   const refresh = await fetch(base + '/api/refresh', { method: 'POST', headers: { Origin: base } });
   assert.equal(refresh.status, 200);
   for (const route of ['/login', '/ml-login.html']) {

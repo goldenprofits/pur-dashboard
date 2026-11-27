@@ -12,6 +12,10 @@ Las páginas del dashboard, las consultas de métricas y la actualización de ca
 
 ## Cálculo
 
+El bloque superior de Mercado Libre y `/mercadolibre` muestran un mismo reporte completo: ROAS de ingresos atribuidos, ROAS total del canal (incluye ventas orgánicas), conversión de visitas y de clics, CTR, CPC, CPA, ACOS/TACOS, margen/ROI operativos, costos relativos y tabla de campañas. Las fórmulas se centralizan en `lib/performance.js`; ratios sin denominador o datos faltantes son `null`, no cero. No se suman porcentajes de campañas ni se confunden visitas/clics con personas únicas.
+
+Las visitas se consultan en `/users/{seller}/items_visits` con el mismo rango UTC−03 de las órdenes. La API admite hasta150días: fallos o períodos mayores conservan la conversión pendiente, sin bloquear ventas ni resultados financieros. Las métricas publicitarias tienen una ventana de atribución de hasta14días y pueden actualizarse; no equivalen a compradores únicos. El ROAS de equilibrio es una estimación del mix total vendido, no una orden para cambiar pujas.
+
 Ventas de órdenes pagadas por fecha de creación en UTC−03; canceladas excluidas. Comisiones `order_items[].sale_fee × quantity`; costo por publicación o costo vigente por familia; envío real `senders[].cost` del vendedor, deduplicado por shipment; gasto Product Ads del mismo período; otros gastos cargados para ese rango exacto.
 
 Los costos vigentes se aplican a todo el período elegido, no representan un historial de precios de adquisición. Los packs requieren costo de pack específico. Si faltan costos, comisiones, publicidad o envíos, el resultado queda pendiente. Devoluciones parciales reducen ingresos y dejan pendiente la revisión del recupero de costos. El resultado es operativo: no equivale a saldo disponible ni incluye impuestos, almacenamiento/cargos de Full o gastos fijos que no se hayan cargado. Las ventas atribuidas de Ads no se suman de nuevo a las ventas del canal.

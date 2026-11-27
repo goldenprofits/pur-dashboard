@@ -5,6 +5,7 @@ const path = require('node:path');
 const store = require('./lib/store');
 const ml = require('./lib/mercadolibre');
 const { ledger, arDate } = require('./lib/ledger');
+const { performance } = require('./lib/performance');
 const { validateReview } = require('./lib/annual-review');
 const { validateSnapshot } = require('./lib/meta-recovery');
 const legacyApp = require('./server');
@@ -76,16 +77,16 @@ app.get('/api/overview', async (req,res) => {
     let entry = cache.get(key);
     if (!entry || Date.now() - entry.at > 5 * 60000) {
       if (!pending.has(key)) pending.set(key, (async () => {
-        const [account, orders, ads] = await Promise.all([ml.get('/users/me'), ml.orders(from,to), ml.ads(from,to)]);
+        const [account, orders, ads, traffic] = await Promise.all([ml.get('/users/me'), ml.orders(from,to), ml.ads(from,to), ml.visits(from,to)]);
         if (String(account.id) !== String(process.env.ML_USER_ID)) throw new Error('La cuenta conectada no coincide con PÜR.');
         const shipping = await ml.shipping(orders);
-        const value = { at: Date.now(), account: account.nickname, orders, ads, shipping };
+        const value = { at: Date.now(), account: account.nickname, orders, ads, shipping, traffic };
         cache.set(key,value); return value;
       })().finally(() => pending.delete(key)));
       entry = await pending.get(key);
     }
     const report = ledger(entry.orders, entry.shipping, entry.ads, settings, from,to);
-    res.json({ ...report, ads: entry.ads, from,to, account: entry.account, fetched_at: new Date(entry.at).toISOString(),
+    res.json({ ...report, ads: entry.ads, traffic: entry.traffic, performance: performance(report, entry.traffic, entry.ads), from,to, account: entry.account, fetched_at: new Date(entry.at).toISOString(),
       expense: settings.period_expenses?.[key] || 0, default_costs: settings.defaults, includes_today: to === arDate(new Date().toISOString()),
       permissions: { can_edit_costs: authenticated(req) },
       note: 'Resultado operativo de órdenes pagadas, por fecha de creación. Antes de impuestos, cargos de Full y gastos fijos que no hayas cargado. Las ventas atribuidas a Ads ya están dentro de las ventas totales.' });
@@ -120,8 +121,9 @@ app.get('/api/mercadolibre', async (req,res) => {
     if (!response.ok) return res.status(response.status).json(d);
     const s = d.summary, a = d.ads;
     res.json({ period:'custom', date_from:from, date_to:to, fetched_at:d.fetched_at,
-      summary:{ revenue:s.revenue, orders:s.orders, avg_ticket:s.orders ? s.revenue/s.orders : 0, units_sold:s.units, cogs_calculado:s.cogs, shipping_cost:s.shipping, comisiones_ml:s.fees, cancelled_orders:s.cancelled, total_orders:s.orders+s.cancelled, profit:s.profit, missing:s.missing, extra:s.extra },
-      advertising:{...a,spend:a.cost,revenue:a.total_amount,impressions:a.prints,sales:a.advertising_items_quantity,roas:a.cost>0 && a.total_amount!==null ? a.total_amount/a.cost : 0},
+      summary:{ revenue:s.revenue, orders:s.orders, avg_ticket:s.orders ? s.revenue/s.orders : null, units_sold:s.units, cogs_calculado:s.cogs, shipping_cost:s.shipping, comisiones_ml:s.fees, cancelled_orders:s.cancelled, total_orders:s.total_orders, profit:s.profit, missing:s.missing, extra:s.extra },
+      advertising:{...a,spend:a.cost,revenue:a.total_amount,impressions:a.prints,sales:a.advertising_items_quantity,roas:d.performance.advertising.roas},
+      traffic:d.traffic, performance:d.performance, includes_today:d.includes_today,
       sales_chart:{labels:d.daily.map(x=>x.date),revenue:d.daily.map(x=>x.revenue),orders:d.daily.map(x=>x.orders)},
       top_products:d.products.map(p=>({name:p.name,quantity:p.quantity,revenue:p.revenue})),
       recent_orders:d.recent.map(o=>({...o,buyer:'Comprador',units:o.products.reduce((n,p)=>n+p.quantity,0)})) });
@@ -148,7 +150,7 @@ app.post('/api/meta-snapshot', (req,res) => {
   } catch(e) { res.status(400).json({error:e.message}); }
 });
 app.get('/mercadolibre', (req,res) => res.sendFile(path.join(__dirname, 'public/ml.html')));
-for (const name of ['ml.css','ml.js','pur-logo.png']) app.get(`/${name}`, (req,res) => res.sendFile(path.join(__dirname,'public',name)));
+for (const name of ['ml.css','ml.js','ml-metrics.js','ml-metrics.css','pur-logo.png']) app.get(`/${name}`, (req,res) => res.sendFile(path.join(__dirname,'public',name)));
 app.use(legacyApp);
 app.use((req,res) => res.sendStatus(404));
 if (require.main === module) app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('PÜR Mercado Libre dashboard ready'));

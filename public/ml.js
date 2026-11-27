@@ -22,6 +22,7 @@ async function load() {
   finally{busy=false;$('refresh').disabled=false;}
 }
 function render(d) {
+  window.renderMLMetrics($('mlMetricsOverview'), d);
   const s=d.summary,a=d.ads;
   const canEditCosts=d.permissions?.can_edit_costs===true;
   $('costButton').hidden=!canEditCosts;$('costButton2').hidden=!canEditCosts;
